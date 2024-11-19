@@ -242,7 +242,7 @@ public class jTPCC implements jTPCCConfig
 	    {
 		resultCSV = new BufferedWriter(new FileWriter(resultCSVName));
 		resultCSV.write("run,elapsed,latency,dblatency," +
-				"ttype,rbk,dskipped,error\n");
+				"ttype,rbk,dskipped,piority,error\n");
 	    }
 	    catch (IOException e)
 	    {
@@ -697,9 +697,10 @@ public class jTPCC implements jTPCCConfig
 	log.info("Term-00, ");
 	log.info("Term-00, Measured tpmC (NewOrders) = " + tpmC);
 	log.info("Term-00, Measured tpmTOTAL = " + tpmTotal);
+	log.info("Term-00, Measured vpmTotal = " + vpmTotal);
 	log.info("Term-00, Session Start     = " + sessionStart );
 	log.info("Term-00, Session End       = " + sessionEnd);
-	log.info("Term-00, Transaction Count = " + transPiorCount);//change 11.13
+	log.info("Term-00, Priority Count = " + transPiorCount);//change 11.13
 	log.info("Term-00, Transaction Count = " + (transactionCount-1));
 		for (String key : costPerWorkerload.keySet()) {
 			Long value = costPerWorkerload.get(key);

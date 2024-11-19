@@ -159,6 +159,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.generatePayment(log, rnd, 0);
 		    term.traceScreen(log);
 		    term.execute(log, db);
+			transPior = term.getTransPior();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 			
@@ -186,6 +187,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.generateStockLevel(log, rnd, 0);
 		    term.traceScreen(log);
 		    term.execute(log, db);
+			transPior = term.getTransPior();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 		}
@@ -212,6 +214,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.generateOrderStatus(log, rnd, 0);
 		    term.traceScreen(log);
 		    term.execute(log, db);
+			transPior = term.getTransPior();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 		}
@@ -238,6 +241,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.generateDelivery(log, rnd, 0);
 		    term.traceScreen(log);
 		    term.execute(log, db);
+			transPior = term.getTransPior();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 
@@ -277,6 +281,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.generateNewOrder(log, rnd, 0);
 		    term.traceScreen(log);
 		    term.execute(log, db);
+			transPior = term.getTransPior();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 		}

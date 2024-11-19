@@ -210,14 +210,15 @@ public class jTPCCTData {
 	public String resultLine(long sessionStart) {
 		String line;
 
-		resultFmt.format("%d,%d,%d,%s,%d,%d,%d\n",
+		resultFmt.format("%d,%d,%d,%s,%d,%d,%d,%d\n",
 				transEnd - sessionStart,
 				transEnd - transDue,
 				transEnd - transStart,
 				transTypeNames[transType],
 				(transRbk) ? 1 : 0,
 				(transType == TT_DELIVERY_BG) ? getSkippedDeliveries() : 0,
-				(transError == null) ? 0 : 1);
+				(transError == null) ? 0 : 1,
+				transPior);
 		line = resultSB.toString();
 		resultSB.setLength(0);
 		return line;
