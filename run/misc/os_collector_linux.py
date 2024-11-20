@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # ----------------------------------------------------------------------
 # os_collector_linux.py -
 #
@@ -30,7 +30,6 @@
 # ----------------------------------------------------------------------
 
 import errno
-import math
 import os
 import sys
 import time
@@ -39,28 +38,28 @@ import time
 # main
 # ----
 def main(argv):
-    global  deviceFDs
-    global  lastDeviceData
+    global deviceFDs
+    global lastDeviceData
 
     # ----
     # Get the runID and collection interval from the command line
     # ----
-    runID = (int)(argv[0])
-    interval = (float)(argv[1])
+    runID = int(argv[0])
+    interval = float(argv[1])
 
     # ----
     # Our start time is now. Since most of the information is deltas
     # we can only produce the first data after the first interval.
     # ----
-    startTime = time.time();
+    startTime = time.time()
     nextDue = startTime + interval
 
     # ----
     # Initialize CPU and vmstat collection and output the CSV header.
     # ----
-    sysInfo = ['run', 'elapsed', ]
+    sysInfo = ['run', 'elapsed']
     sysInfo += initSystemUsage()
-    print (",".join([str(x) for x in sysInfo]))
+    print(",".join(map(str, sysInfo)))
 
     # ----
     # Get all the devices from the command line.
@@ -82,13 +81,13 @@ def main(argv):
     # ----
     for dev in devices:
         if dev.startswith('blk_'):
-            devInfo = ['run', 'elapsed', 'device', ]
+            devInfo = ['run', 'elapsed', 'device']
             devInfo += initBlockDevice(dev)
-            print (",".join([str(x) for x in devInfo]))
+            print(",".join(map(str, devInfo)))
         elif dev.startswith('net_'):
-            devInfo = ['run', 'elapsed', 'device', ]
+            devInfo = ['run', 'elapsed', 'device']
             devInfo += initNetDevice(dev)
-            print (",".join([str(x) for x in devInfo]))
+            print(",".join(map(str, devInfo)))
 
     # ----
     # Flush all header lines.
@@ -104,27 +103,27 @@ def main(argv):
             now = time.time()
             if nextDue > now:
                 time.sleep(nextDue - now)
-            elapsed = (int)((nextDue - startTime) * 1000.0)
+            elapsed = int((nextDue - startTime) * 1000.0)
 
             # ----
             # Collect CPU and vmstat information.
             # ----
-            sysInfo = [runID, elapsed, ]
+            sysInfo = [runID, elapsed]
             sysInfo += getSystemUsage()
-            print (",".join([str(x) for x in sysInfo]))
+            print(",".join(map(str, sysInfo)))
 
             # ----
             # Collect all device utilization data.
             # ----
             for dev in devices:
                 if dev.startswith('blk_'):
-                    devInfo = [runID, elapsed, dev, ]
+                    devInfo = [runID, elapsed, dev]
                     devInfo += getBlockUsage(dev, interval)
-                    print(",".join([str(x) for x in devInfo]))
+                    print(",".join(map(str, devInfo)))
                 elif dev.startswith('net_'):
-                    devInfo = [runID, elapsed, dev, ]
+                    devInfo = [runID, elapsed, dev]
                     devInfo += getNetUsage(dev, interval)
-                    print(",".join([str(x) for x in devInfo]))
+                    print(",".join(map(str, devInfo)))
 
             # ----
             # Bump the time when we are next due.
@@ -133,17 +132,10 @@ def main(argv):
 
             sys.stdout.flush()
 
-    # ----
-    # Running on the command line for test purposes?
-    # ----
     except KeyboardInterrupt:
-        print ("")
+        print("")
         return 0
 
-    # ----
-    # The OSCollector class will just close our stdout on the other
-    # side, so this is expected.
-    # ----
     except IOError as e:
         if e.errno == errno.EPIPE:
             return 0
@@ -151,43 +143,43 @@ def main(argv):
             raise e
 
 def initSystemUsage():
-    global  procStatFD
-    global  procVMStatFD
-    global  lastStatData
-    global  lastVMStatData
+    global procStatFD
+    global procVMStatFD
+    global lastStatData
+    global lastVMStatData
 
-    procStatFD = open("/proc/stat", "rb", buffering = 0)
+    procStatFD = open("/proc/stat", "r")
     for line in procStatFD:
         line = line.split()
         if line[0] == "cpu":
             lastStatData = [int(x) for x in line[1:]]
             break
     if len(lastStatData) != 10:
-        raise Exception("cpu line in /proc/stat too short");
+        raise Exception("cpu line in /proc/stat too short")
 
-    procVMStatFD = open("/proc/vmstat", "r", buffering = 0)
+    procVMStatFD = open("/proc/vmstat", "r")
     lastVMStatData = {}
     for line in procVMStatFD:
         line = line.split()
-        if line[0] in ['nr_dirty', ]:
+        if line[0] in ['nr_dirty']:
             lastVMStatData['vm_' + line[0]] = int(line[1])
     if len(lastVMStatData.keys()) != 1:
         raise Exception("not all elements found in /proc/vmstat")
-        
+
     return [
-            'cpu_user', 'cpu_nice', 'cpu_system',
-            'cpu_idle', 'cpu_iowait', 'cpu_irq',
-            'cpu_softirq', 'cpu_steal',
-            'cpu_guest', 'cpu_guest_nice',
-            'vm_nr_dirty',
-        ]
+        'cpu_user', 'cpu_nice', 'cpu_system',
+        'cpu_idle', 'cpu_iowait', 'cpu_irq',
+        'cpu_softirq', 'cpu_steal',
+        'cpu_guest', 'cpu_guest_nice',
+        'vm_nr_dirty',
+    ]
 
 
 def getSystemUsage():
-    global  procStatFD
-    global  procVMStatFD
-    global  lastStatData
-    global  lastVMStatData
+    global procStatFD
+    global procVMStatFD
+    global lastStatData
+    global lastVMStatData
 
     procStatFD.seek(0, 0)
     for line in procStatFD:
@@ -195,13 +187,13 @@ def getSystemUsage():
         if line[0] != "cpu":
             continue
         statData = [int(x) for x in line[1:]]
-        deltaTotal = (float)(sum(statData) - sum(lastStatData))
+        deltaTotal = float(sum(statData) - sum(lastStatData))
         if deltaTotal == 0:
             result = [0.0 for x in statData]
         else:
             result = []
             for old, new in zip(lastStatData, statData):
-                result.append((float)(new - old) / deltaTotal)
+                result.append(float(new - old) / deltaTotal)
         procStatLast = statData
         break
 
@@ -209,36 +201,36 @@ def getSystemUsage():
     newVMStatData = {}
     for line in procVMStatFD:
         line = line.split()
-        if line[0] in ['nr_dirty', ]:
+        if line[0] in ['nr_dirty']:
             newVMStatData['vm_' + line[0]] = int(line[1])
-    
-    for key in ['vm_nr_dirty', ]:
+
+    for key in ['vm_nr_dirty']:
         result.append(newVMStatData[key])
 
     return result
 
 
 def initBlockDevice(dev):
-    global  deviceFDs
-    global  lastDeviceData
+    global deviceFDs
+    global lastDeviceData
 
     devPath = os.path.join("/sys/block", dev[4:], "stat")
-    deviceFDs[dev] = open(devPath, "r", buffering = 0)
+    deviceFDs[dev] = open(devPath, "r")
     line = deviceFDs[dev].readline().split()
 
     newData = []
     for idx, mult in [
-                (0, 1.0), (1, 1.0), (2, 0.5),
-                (4, 1.0), (5, 1.0), (6, 0.5),
-            ]:
-        newData.append((int)(line[idx]))
+        (0, 1.0), (1, 1.0), (2, 0.5),
+        (4, 1.0), (5, 1.0), (6, 0.5),
+    ]:
+        newData.append(int(line[idx]))
     lastDeviceData[dev] = newData
 
-    return ['rdiops', 'rdmerges', 'rdkbps', 'wriops', 'wrmerges', 'wrkbps', ]
+    return ['rdiops', 'rdmerges', 'rdkbps', 'wriops', 'wrmerges', 'wrkbps']
 
 
 def getBlockUsage(dev, interval):
-    global  deviceFDs
+    global deviceFDs
 
     deviceFDs[dev].seek(0, 0)
     line = deviceFDs[dev].readline().split()
@@ -248,49 +240,48 @@ def getBlockUsage(dev, interval):
     result = []
     ridx = 0
     for idx, mult in [
-                (0, 1.0), (1, 1.0), (2, 0.5),
-                (4, 1.0), (5, 1.0), (6, 0.5),
-            ]:
-        newData.append((int)(line[idx]))
-        result.append((float)(newData[ridx] - oldData[ridx]) * mult / interval)
+        (0, 1.0), (1, 1.0), (2, 0.5),
+        (4, 1.0), (5, 1.0), (6, 0.5),
+    ]:
+        newData.append(int(line[idx]))
+        result.append(float(newData[ridx] - oldData[ridx]) * mult / interval)
         ridx += 1
     lastDeviceData[dev] = newData
     return result
 
 def initNetDevice(dev):
-    global  deviceFDs
-    global  lastDeviceData
+    global deviceFDs
+    global lastDeviceData
 
     devPath = os.path.join("/sys/class/net", dev[4:], "statistics")
     deviceData = []
-    for fname in ['rx_packets', 'rx_bytes', 'tx_packets', 'tx_bytes', ]:
+    for fname in ['rx_packets', 'rx_bytes', 'tx_packets', 'tx_bytes']:
         key = dev + "." + fname
-        deviceFDs[key] = open(os.path.join(devPath, fname),
-                              "r", buffering = 0)
-        deviceData.append((int)(deviceFDs[key].read()))
+        deviceFDs[key] = open(os.path.join(devPath, fname), "r")
+        deviceData.append(int(deviceFDs[key].read()))
 
     lastDeviceData[dev] = deviceData
 
-    return ['rxpktsps', 'rxkbps', 'txpktsps', 'txkbps', ]
+    return ['rxpktsps', 'rxkbps', 'txpktsps', 'txkbps']
 
 
 def getNetUsage(dev, interval):
-    global  deviceFDs
-    global  lastDeviceData
+    global deviceFDs
+    global lastDeviceData
 
     oldData = lastDeviceData[dev]
     newData = []
-    for fname in ['rx_packets', 'rx_bytes', 'tx_packets', 'tx_bytes', ]:
+    for fname in ['rx_packets', 'rx_bytes', 'tx_packets', 'tx_bytes']:
         key = dev + "." + fname
         deviceFDs[key].seek(0, 0)
-        newData.append((int)(deviceFDs[key].read()))
+        newData.append(int(deviceFDs[key].read()))
 
     result = [
-            (float)(newData[0] - oldData[0]) / interval,
-            (float)(newData[1] - oldData[1]) / interval / 1024.0,
-            (float)(newData[2] - oldData[2]) / interval,
-            (float)(newData[3] - oldData[3]) / interval / 1024.0,
-        ]
+        float(newData[0] - oldData[0]) / interval,
+        float(newData[1] - oldData[1]) / interval / 1024.0,
+        float(newData[2] - oldData[2]) / interval,
+        float(newData[3] - oldData[3]) / interval / 1024.0,
+    ]
     lastDeviceData[dev] = newData
     return result
 

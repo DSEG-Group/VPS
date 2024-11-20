@@ -32,7 +32,7 @@ public class jTPCC implements jTPCCConfig
     private jTPCCTerminal[] terminals;
     private String[] terminalNames;
     private boolean terminalsBlockingExit = false;
-    private long terminalsStarted = 0, sessionCount = 0, transactionCount = 0, transPiorCount = 0;//change 11.13
+    private long terminalsStarted = 0, sessionCount = 0, transactionCount = 0, transPrioCount = 0;//change 11.13
     private Object counterLock = new Object();
 
     private long newOrderCounter = 0, sessionStartTimestamp, sessionEndTimestamp, sessionNextTimestamp=0, sessionNextKounter=0;
@@ -242,7 +242,7 @@ public class jTPCC implements jTPCCConfig
 	    {
 		resultCSV = new BufferedWriter(new FileWriter(resultCSVName));
 		resultCSV.write("run,elapsed,latency,dblatency," +
-				"ttype,rbk,dskipped,piority,error\n");
+				"ttype,rbk,dskipped,Prioity,error\n");
 	    }
 	    catch (IOException e)
 	    {
@@ -638,12 +638,12 @@ public class jTPCC implements jTPCCConfig
 	}
     }
 
-    public void signalTerminalEndedTransaction(String terminalName, String transactionType, long executionTime, String comment, int newOrder,int transPior)
+    public void signalTerminalEndedTransaction(String terminalName, String transactionType, long executionTime, String comment, int newOrder,int transPrio)
     {
 	synchronized (counterLock)
 	{
 	    transactionCount++;
-		transPiorCount+= transPior;//change 11.13
+		transPrioCount+= transPrio;//change 11.13
 	    fastNewOrderCounter += newOrder;
 		Long counter = costPerWorkerload.get(transactionType);
 		if (counter == null) {
@@ -690,7 +690,7 @@ public class jTPCC implements jTPCCConfig
 	long totalMem = Runtime.getRuntime().totalMemory() / (1024*1024);
 	double tpmC = (6000000*fastNewOrderCounter/(currTimeMillis - sessionStartTimestamp))/100.0;
 	double tpmTotal = (6000000*transactionCount/(currTimeMillis - sessionStartTimestamp))/100.0;
-	double vpmTotal = (6000000*transPiorCount/(currTimeMillis - sessionStartTimestamp))/100.0;//change 11.13
+	double vpmTotal = (6000000*transPrioCount/(currTimeMillis - sessionStartTimestamp))/100.0;//change 11.13
 
 	System.out.println("");
 	log.info("Term-00, ");
@@ -700,7 +700,7 @@ public class jTPCC implements jTPCCConfig
 	log.info("Term-00, Measured vpmTotal = " + vpmTotal);
 	log.info("Term-00, Session Start     = " + sessionStart );
 	log.info("Term-00, Session End       = " + sessionEnd);
-	log.info("Term-00, Priority Count = " + transPiorCount);//change 11.13
+	log.info("Term-00, Priority Count = " + transPrioCount);//change 11.13
 	log.info("Term-00, Transaction Count = " + (transactionCount-1));
 		for (String key : costPerWorkerload.keySet()) {
 			Long value = costPerWorkerload.get(key);

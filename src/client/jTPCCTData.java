@@ -39,7 +39,7 @@ public class jTPCCTData {
 	private long transEnd;
 	private boolean transRbk;
 	private String transError;
-	private int transPior = 0;//change 11.13
+	private int transPrio = 0;//change 11.13
 
 	private int terminalWarehouse = 0;
 	private int terminalDistrict = 0;
@@ -114,9 +114,9 @@ public class jTPCCTData {
 		transEnd = System.currentTimeMillis();
 	}
 
-	public int getTransPior()//change 11.13
+	public int getTransPrio()//change 11.13
 		throws Exception{
-			return this.transPior;
+			return this.transPrio;
 	}
 
 
@@ -217,8 +217,9 @@ public class jTPCCTData {
 				transTypeNames[transType],
 				(transRbk) ? 1 : 0,
 				(transType == TT_DELIVERY_BG) ? getSkippedDeliveries() : 0,
-				(transError == null) ? 0 : 1,
-				transPior);
+				transPrio,
+				(transError == null) ? 0 : 1
+				);
 		line = resultSB.toString();
 		resultSB.setLength(0);
 		return line;
@@ -248,7 +249,7 @@ public class jTPCCTData {
 		delivery = null;
 		deliveryBG = null;
 
-		transPior = rnd.nextInt(1, 9); // 随机分配优先级 change 11.13
+		transPrio = rnd.nextInt(1, 9); // 随机分配优先级 change 11.13
 		newOrder.w_id = terminalWarehouse; // 2.4.1.1
 		newOrder.d_id = rnd.nextInt(1, 10); // 2.4.1.2
 		newOrder.c_id = rnd.getCustomerID();
@@ -680,7 +681,7 @@ public class jTPCCTData {
 		delivery = null;
 		deliveryBG = null;
 
-		transPior = rnd.nextInt(1, 9);// change 11.13
+		transPrio = rnd.nextInt(1, 9);// change 11.13
 		payment.w_id = terminalWarehouse; // 2.5.1.1
 		payment.d_id = rnd.nextInt(1, 10); // 2.5.1.2
 		payment.c_w_id = payment.w_id;
@@ -1031,7 +1032,7 @@ public class jTPCCTData {
 		delivery = null;
 		deliveryBG = null;
 
-		transPior = rnd.nextInt(1, 9);// change 11.13
+		transPrio = rnd.nextInt(1, 9);// change 11.13
 		orderStatus.w_id = terminalWarehouse;
 		orderStatus.d_id = rnd.nextInt(1, 10);
 		if (rnd.nextInt(1, 100) <= 60) {
@@ -1251,7 +1252,7 @@ public class jTPCCTData {
 		delivery = null;
 		deliveryBG = null;
 
-		transPior = rnd.nextInt(1, 9);//change 11.13
+		transPrio = rnd.nextInt(1, 9);//change 11.13
 		stockLevel.w_id = terminalWarehouse;
 		stockLevel.d_id = terminalDistrict;
 		stockLevel.threshold = rnd.nextInt(10, 20);
@@ -1347,7 +1348,7 @@ public class jTPCCTData {
 		delivery = new DeliveryData();
 		deliveryBG = null;
 
-		transPior = rnd.nextInt(1, 9);//change 11.13
+		transPrio = rnd.nextInt(1, 9);//change 11.13
 		delivery.w_id = terminalWarehouse;
 		delivery.o_carrier_id = rnd.nextInt(1, 10);
 		delivery.execution_status = null;
