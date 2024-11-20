@@ -28,7 +28,7 @@ bin/
 ### Mac OS ###
 .DS_Store
 
-run/
+run/my_result*
 build/
 doc/
 lib/
