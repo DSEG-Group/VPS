@@ -27,7 +27,7 @@ public class jTPCCTData {
 			"NEW_ORDER", "PAYMENT", "ORDER_STATUS", "STOCK_LEVEL",
 			"DELIVERY", "DELIVERY_BG", "NONE", "DONE" };
 
-	public int sched_code;
+	public final String abort = "ABORT;";
 	public long sched_fuzz;
 	public jTPCCTData term_left;
 	public jTPCCTData term_right;
@@ -40,9 +40,14 @@ public class jTPCCTData {
 	private boolean transRbk;
 	private String transError;
 	private int transPrio = 0;//change 11.13
+	private long transGeneratime = 0;
+	private double transVal_pre;
+	private double transVal_real;
+	private long timeDelta;//时差
 
 	private int terminalWarehouse = 0;
 	private int terminalDistrict = 0;
+	private long timeCounterNow;//确认当前时间
 
 	private NewOrderData newOrder = null;
 	private PaymentData payment = null;
@@ -117,6 +122,16 @@ public class jTPCCTData {
 	public int getTransPrio()//change 11.13
 		throws Exception{
 			return this.transPrio;
+	}
+
+	public double getTransVal_pre()
+	throws Exception{
+		return this.transVal_pre;
+	}
+
+	public double getTransVal_real()
+	throws Exception{
+		return this.transVal_real;
 	}
 
 
@@ -210,13 +225,17 @@ public class jTPCCTData {
 	public String resultLine(long sessionStart) {
 		String line;
 
-		resultFmt.format("%d,%d,%d,%s,%d,%d,%d,%d\n",
+		resultFmt.format("%d,%d,%d,%d,%d,%s,%d,%d,%.2f,%.2f,%d,%d\n",
+				transGeneratime-sessionStart,
+				transStart-sessionStart,
 				transEnd - sessionStart,
 				transEnd - transDue,
 				transEnd - transStart,
 				transTypeNames[transType],
 				(transRbk) ? 1 : 0,
 				(transType == TT_DELIVERY_BG) ? getSkippedDeliveries() : 0,
+				transVal_pre,
+				transVal_real,
 				transPrio,
 				(transError == null) ? 0 : 1
 				);
@@ -241,6 +260,7 @@ public class jTPCCTData {
 		transEnd = 0;
 		transRbk = false;
 		transError = null;
+		transGeneratime = System.currentTimeMillis();
 
 		newOrder = new NewOrderData();
 		payment = null;
@@ -249,12 +269,13 @@ public class jTPCCTData {
 		delivery = null;
 		deliveryBG = null;
 
-		transPrio = rnd.nextInt(1, 9); // 随机分配优先级 change 11.13
 		newOrder.w_id = terminalWarehouse; // 2.4.1.1
 		newOrder.d_id = rnd.nextInt(1, 10); // 2.4.1.2
 		newOrder.c_id = rnd.getCustomerID();
 		o_ol_cnt = rnd.nextInt(5, 15); // 2.4.1.3
-
+		
+		transVal_pre = 0;//根据物品单价由1-100不等，因此设置平均单价为50，因此该下单事务的价值为下单物品数量*50
+		transVal_real = 0;
 		while (i < o_ol_cnt) // 2.4.1.5
 		{
 			newOrder.ol_i_id[i] = rnd.getItemID();
@@ -263,10 +284,13 @@ public class jTPCCTData {
 			else
 				newOrder.ol_supply_w_id[i] = rnd.nextInt(1, numWarehouses);
 			newOrder.ol_quantity[i] = rnd.nextInt(1, 10);
+			transVal_pre += newOrder.ol_quantity[i]*50;
 			newOrder.found[i] = false;
 			i++;
 		}
 
+		transVal_pre = transVal_pre*0.9;
+		transPrio = 1+(int)(transVal_pre / 675);
 		if (rnd.nextInt(1, 100) == 1) // 2.4.1.4
 		{
 			newOrder.ol_i_id[i - 1] += (rnd.nextInt(1, 9) * 1000000);
@@ -280,6 +304,7 @@ public class jTPCCTData {
 			newOrder.ol_quantity[i] = 0;
 			i++;
 		}
+
 	}
 
 	private void executeNewOrder(Logger log, jTPCCConnection db)
@@ -287,12 +312,13 @@ public class jTPCCTData {
 		PreparedStatement stmt;
 		PreparedStatement insertOrderLineBatch;
 		ResultSet rs;
-
+		transVal_real = 0;
 		int o_id;
 		int o_all_local = 1;
 		long o_entry_d;
 		int ol_cnt;
 		double total_amount = 0.0;
+		
 
 		int ol_seq[] = new int[15];
 
@@ -535,7 +561,7 @@ public class jTPCCTData {
 
 			newOrder.execution_status = new String("Order placed");
 			newOrder.total_amount = total_amount;
-
+			transVal_real = total_amount*0.9;
 			db.commit();
 
 		} catch (SQLException se) {
@@ -673,6 +699,9 @@ public class jTPCCTData {
 		transEnd = 0;
 		transRbk = false;
 		transError = null;
+		transGeneratime = System.currentTimeMillis();
+		transVal_pre = 0;
+		transVal_real = 0;
 
 		newOrder = null;
 		payment = new PaymentData();
@@ -681,7 +710,7 @@ public class jTPCCTData {
 		delivery = null;
 		deliveryBG = null;
 
-		transPrio = rnd.nextInt(1, 9);// change 11.13
+		// change 11.13
 		payment.w_id = terminalWarehouse; // 2.5.1.1
 		payment.d_id = rnd.nextInt(1, 10); // 2.5.1.2
 		payment.c_w_id = payment.w_id;
@@ -701,6 +730,9 @@ public class jTPCCTData {
 
 		// 2.5.1.3
 		payment.h_amount = ((double) rnd.nextLong(100, 500000)) / 100.0;
+		transVal_pre = payment.h_amount;//根据客户付款金额确定价值。
+		
+		transPrio = 1+(int)(transVal_pre/675);
 	}
 
 	private void executePayment(Logger log, jTPCCConnection db)
@@ -710,7 +742,7 @@ public class jTPCCTData {
 		Vector<Integer> c_id_list = new Vector<Integer>();
 
 		long h_date = System.currentTimeMillis();
-
+		transVal_real = payment.h_amount;
 		try {
 			// Update the DISTRICT.
 			stmt = db.stmtPaymentUpdateDistrict;
@@ -724,6 +756,9 @@ public class jTPCCTData {
 			stmt.setInt(1, payment.w_id);
 			stmt.setInt(2, payment.d_id);
 			rs = stmt.executeQuery();
+			timeCounterNow = System.currentTimeMillis();
+			timeDelta = timeCounterNow - transStart;
+			if()
 			if (!rs.next()) {
 				rs.close();
 				throw new Exception("District for" +
@@ -816,6 +851,7 @@ public class jTPCCTData {
 			payment.c_balance -= payment.h_amount;
 			if (payment.c_credit.equals("GC")) {
 				// Customer with good credit, don't update C_DATA.
+				transVal_real = transVal_real*0.9;
 				stmt = db.stmtPaymentUpdateCustomer;
 				stmt.setDouble(1, payment.h_amount);
 				stmt.setDouble(2, payment.h_amount);
@@ -1024,6 +1060,9 @@ public class jTPCCTData {
 		transEnd = 0;
 		transRbk = false;
 		transError = null;
+		transGeneratime = System.currentTimeMillis();
+		transVal_pre = 1;
+		transVal_real = 1;
 
 		newOrder = null;
 		payment = null;
@@ -1032,7 +1071,7 @@ public class jTPCCTData {
 		delivery = null;
 		deliveryBG = null;
 
-		transPrio = rnd.nextInt(1, 9);// change 11.13
+		transPrio = (int)(transVal_pre/675);// change 11.13
 		orderStatus.w_id = terminalWarehouse;
 		orderStatus.d_id = rnd.nextInt(1, 10);
 		if (rnd.nextInt(1, 100) <= 60) {
@@ -1244,6 +1283,9 @@ public class jTPCCTData {
 		transEnd = 0;
 		transRbk = false;
 		transError = null;
+		transGeneratime = System.currentTimeMillis();
+		transVal_pre = 675*5;
+		transVal_real = 675*5;
 
 		newOrder = null;
 		payment = null;
@@ -1252,7 +1294,7 @@ public class jTPCCTData {
 		delivery = null;
 		deliveryBG = null;
 
-		transPrio = rnd.nextInt(1, 9);//change 11.13
+		transPrio = 5;//change 11.13
 		stockLevel.w_id = terminalWarehouse;
 		stockLevel.d_id = terminalDistrict;
 		stockLevel.threshold = rnd.nextInt(10, 20);
@@ -1340,6 +1382,9 @@ public class jTPCCTData {
 		transEnd = 0;
 		transRbk = false;
 		transError = null;
+		transGeneratime = System.currentTimeMillis();
+		transVal_pre = 0;
+		transVal_real = 0;
 
 		newOrder = null;
 		payment = null;
@@ -1348,7 +1393,7 @@ public class jTPCCTData {
 		delivery = new DeliveryData();
 		deliveryBG = null;
 
-		transPrio = rnd.nextInt(1, 9);//change 11.13
+		transPrio = (int)(transVal_pre/675);//change 11.13
 		delivery.w_id = terminalWarehouse;
 		delivery.o_carrier_id = rnd.nextInt(1, 10);
 		delivery.execution_status = null;
@@ -1434,6 +1479,9 @@ public class jTPCCTData {
 		transEnd = 0;
 		transRbk = false;
 		transError = null;
+		transVal_pre = 1;
+		transVal_real = 1;
+		transGeneratime = System.currentTimeMillis();
 
 		newOrder = null;
 		payment = null;

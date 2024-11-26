@@ -320,7 +320,7 @@ public class LoadDataWorker implements Runnable
 	    {
 		stmtItem.setInt(1, i_id);
 		stmtItem.setString(2, rnd.getAString(14, 24));
-		stmtItem.setDouble(3, ((double)rnd.nextLong(100, 10000)) / 100.0);
+		stmtItem.setDouble(3, ((double)rnd.nextLong(100, 10000)) / 100.0);//can set the weight of the high value item.
 		stmtItem.setString(4, iData);
 		stmtItem.setInt(5, rnd.nextInt(1, 10000));
 

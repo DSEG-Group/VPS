@@ -60,6 +60,7 @@ public class jTPCCConnection
     {
 	this.dbConn = dbConn;
 	this.dbType = dbType;
+	
 	stmtNewOrderSelectStockBatch = new PreparedStatement[16];
 	String st = "SELECT s_i_id, s_w_id, s_quantity, s_data, " +
 				"       s_dist_01, s_dist_02, s_dist_03, s_dist_04, " +

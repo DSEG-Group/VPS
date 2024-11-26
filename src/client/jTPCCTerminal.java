@@ -30,7 +30,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
     private jTPCC parent;
     private jTPCCRandom rnd;
 
-	private int transPrio;//change 11.13
+	private double transVal;//change 11.13
     private int transactionCount = 1;
     private int numTransactions;
     private int numWarehouses;
@@ -159,7 +159,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.generatePayment(log, rnd, 0);
 		    term.traceScreen(log);
 		    term.execute(log, db);
-			transPrio = term.getTransPrio();
+			transVal = term.getTransVal_real();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 			
@@ -187,7 +187,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.generateStockLevel(log, rnd, 0);
 		    term.traceScreen(log);
 		    term.execute(log, db);
-			transPrio = term.getTransPrio();
+			transVal = term.getTransVal_real();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 		}
@@ -214,7 +214,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.generateOrderStatus(log, rnd, 0);
 		    term.traceScreen(log);
 		    term.execute(log, db);
-			transPrio = term.getTransPrio();
+			transVal = term.getTransVal_real();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 		}
@@ -241,7 +241,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.generateDelivery(log, rnd, 0);
 		    term.traceScreen(log);
 		    term.execute(log, db);
-			transPrio = term.getTransPrio();
+			transVal = term.getTransVal_real();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 
@@ -281,7 +281,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.generateNewOrder(log, rnd, 0);
 		    term.traceScreen(log);
 		    term.execute(log, db);
-			transPrio = term.getTransPrio();
+			transVal = term.getTransVal_real();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 		}
@@ -304,11 +304,11 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 
 	    if(!transactionTypeName.equals("Delivery"))
 	    {
-		parent.signalTerminalEndedTransaction(this.terminalName, transactionTypeName, transactionEnd - transactionStart, null, newOrder,transPrio);//change 11.13
+		parent.signalTerminalEndedTransaction(this.terminalName, transactionTypeName, transactionEnd - transactionStart, null, newOrder,transVal);//change 11.13
 	    }
 	    else
 	    {
-		parent.signalTerminalEndedTransaction(this.terminalName, transactionTypeName, transactionEnd - transactionStart, (skippedDeliveries == 0 ? "None" : "" + skippedDeliveries + " delivery(ies) skipped."), newOrder,transPrio);//change 11.13
+		parent.signalTerminalEndedTransaction(this.terminalName, transactionTypeName, transactionEnd - transactionStart, (skippedDeliveries == 0 ? "None" : "" + skippedDeliveries + " delivery(ies) skipped."), newOrder,transVal);//change 11.13
 	    }
 
 	    if(limPerMin_Terminal>0){
