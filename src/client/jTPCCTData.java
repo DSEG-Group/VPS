@@ -27,11 +27,11 @@ public class jTPCCTData {
 			"NEW_ORDER", "PAYMENT", "ORDER_STATUS", "STOCK_LEVEL",
 			"DELIVERY", "DELIVERY_BG", "NONE", "DONE" };
 
-	public final String abort = "ABORT;";
 	public long sched_fuzz;
 	public jTPCCTData term_left;
 	public jTPCCTData term_right;
 	public int tree_height;
+	private int abort = 0;
 
 	private int transType;
 	private long transDue;
@@ -39,15 +39,16 @@ public class jTPCCTData {
 	private long transEnd;
 	private boolean transRbk;
 	private String transError;
-	private int transPrio = 0;//change 11.13
+	private int transPrio = 0;// change 11.13
 	private long transGeneratime = 0;
 	private double transVal_pre;
 	private double transVal_real;
-	private long timeDelta;//时差
+	private long timeDelta;// 时差
+	private double abortPoss;
 
 	private int terminalWarehouse = 0;
 	private int terminalDistrict = 0;
-	private long timeCounterNow;//确认当前时间
+	private long timeCounterNow;// 确认当前时间
 
 	private NewOrderData newOrder = null;
 	private PaymentData payment = null;
@@ -81,7 +82,7 @@ public class jTPCCTData {
 		return terminalDistrict;
 	}
 
-	public void execute(Logger log, jTPCCConnection db)
+	public void execute(Logger log, jTPCCConnection db, jTPCCRandom rnd)
 			throws Exception {
 		transStart = System.currentTimeMillis();
 		if (transDue == 0)
@@ -89,11 +90,11 @@ public class jTPCCTData {
 
 		switch (transType) {
 			case TT_NEW_ORDER:
-				executeNewOrder(log, db);
+				executeNewOrder(log, db, rnd);
 				break;
 
 			case TT_PAYMENT:
-				executePayment(log, db);
+				executePayment(log, db, rnd);
 				break;
 
 			case TT_ORDER_STATUS:
@@ -119,21 +120,20 @@ public class jTPCCTData {
 		transEnd = System.currentTimeMillis();
 	}
 
-	public int getTransPrio()//change 11.13
-		throws Exception{
-			return this.transPrio;
+	public int getTransPrio()// change 11.13
+			throws Exception {
+		return this.transPrio;
 	}
 
 	public double getTransVal_pre()
-	throws Exception{
+			throws Exception {
 		return this.transVal_pre;
 	}
 
 	public double getTransVal_real()
-	throws Exception{
+			throws Exception {
 		return this.transVal_real;
 	}
-
 
 	public void traceScreen(Logger log)
 			throws Exception {
@@ -225,9 +225,9 @@ public class jTPCCTData {
 	public String resultLine(long sessionStart) {
 		String line;
 
-		resultFmt.format("%d,%d,%d,%d,%d,%s,%d,%d,%.2f,%.2f,%d,%d\n",
-				transGeneratime-sessionStart,
-				transStart-sessionStart,
+		resultFmt.format("%d,%d,%d,%d,%d,%s,%d,%d,%.2f,%.2f,%d,%d,%d\n",
+				transGeneratime - sessionStart,
+				transStart - sessionStart,
 				transEnd - sessionStart,
 				transEnd - transDue,
 				transEnd - transStart,
@@ -236,9 +236,9 @@ public class jTPCCTData {
 				(transType == TT_DELIVERY_BG) ? getSkippedDeliveries() : 0,
 				transVal_pre,
 				transVal_real,
+				abort,
 				transPrio,
-				(transError == null) ? 0 : 1
-				);
+				(transError == null) ? 0 : 1);
 		line = resultSB.toString();
 		resultSB.setLength(0);
 		return line;
@@ -273,8 +273,8 @@ public class jTPCCTData {
 		newOrder.d_id = rnd.nextInt(1, 10); // 2.4.1.2
 		newOrder.c_id = rnd.getCustomerID();
 		o_ol_cnt = rnd.nextInt(5, 15); // 2.4.1.3
-		
-		transVal_pre = 0;//根据物品单价由1-100不等，因此设置平均单价为50，因此该下单事务的价值为下单物品数量*50
+
+		transVal_pre = 0;// 根据物品单价由1-100不等，因此设置平均单价为50，因此该下单事务的价值为下单物品数量*50
 		transVal_real = 0;
 		while (i < o_ol_cnt) // 2.4.1.5
 		{
@@ -284,13 +284,13 @@ public class jTPCCTData {
 			else
 				newOrder.ol_supply_w_id[i] = rnd.nextInt(1, numWarehouses);
 			newOrder.ol_quantity[i] = rnd.nextInt(1, 10);
-			transVal_pre += newOrder.ol_quantity[i]*50;
+			transVal_pre += newOrder.ol_quantity[i] * 50;
 			newOrder.found[i] = false;
 			i++;
 		}
 
-		transVal_pre = transVal_pre*0.9;
-		transPrio = 1+(int)(transVal_pre / 675);
+		transVal_pre = transVal_pre * 0.9;
+		transPrio = 1 + (int) (transVal_pre / 675);
 		if (rnd.nextInt(1, 100) == 1) // 2.4.1.4
 		{
 			newOrder.ol_i_id[i - 1] += (rnd.nextInt(1, 9) * 1000000);
@@ -307,7 +307,7 @@ public class jTPCCTData {
 
 	}
 
-	private void executeNewOrder(Logger log, jTPCCConnection db)
+	private void executeNewOrder(Logger log, jTPCCConnection db, jTPCCRandom rnd)
 			throws Exception {
 		PreparedStatement stmt;
 		PreparedStatement insertOrderLineBatch;
@@ -318,7 +318,6 @@ public class jTPCCTData {
 		long o_entry_d;
 		int ol_cnt;
 		double total_amount = 0.0;
-		
 
 		int ol_seq[] = new int[15];
 
@@ -369,6 +368,22 @@ public class jTPCCTData {
 			stmt.setInt(1, newOrder.w_id);
 			stmt.setInt(2, newOrder.d_id);
 			rs = stmt.executeQuery();
+
+			timeCounterNow = System.currentTimeMillis();
+			timeDelta = timeCounterNow - transStart;
+			if (timeDelta > 200) {
+				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+				if (abortPoss > 1) {
+					abortPoss = 1;
+				}
+				int poss = rnd.nextInt(1, 100);
+				if (poss < 100 * abortPoss) {
+					abort = 1;
+					//db.rollback();
+					//return;
+				}
+			}
+
 			if (!rs.next()) {
 				rs.close();
 				throw new SQLException("District for" +
@@ -386,6 +401,22 @@ public class jTPCCTData {
 			stmt.setInt(2, newOrder.d_id);
 			stmt.setInt(3, newOrder.c_id);
 			rs = stmt.executeQuery();
+
+			timeCounterNow = System.currentTimeMillis();
+			timeDelta = timeCounterNow - transStart;
+			if (timeDelta > 200) {
+				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+				if (abortPoss > 1) {
+					abortPoss = 1;
+				}
+				int poss = rnd.nextInt(1, 100);
+				if (poss < 100 * abortPoss) {
+					abort = 1;
+					//db.rollback();
+					//return;
+				}
+			}
+
 			if (!rs.next()) {
 				rs.close();
 				throw new SQLException("Warehouse or Customer for" +
@@ -405,6 +436,21 @@ public class jTPCCTData {
 			stmt.setInt(2, newOrder.d_id);
 			stmt.executeUpdate();
 
+			timeCounterNow = System.currentTimeMillis();
+			timeDelta = timeCounterNow - transStart;
+			if (timeDelta > 200) {
+				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+				if (abortPoss > 1) {
+					abortPoss = 1;
+				}
+				int poss = rnd.nextInt(1, 100);
+				if (poss < 100 * abortPoss) {
+					abort = 1;
+					//db.rollback();
+					//return;
+				}
+			}
+
 			// Insert the ORDER row
 			stmt = db.stmtNewOrderInsertOrder;
 			stmt.setInt(1, o_id);
@@ -416,12 +462,42 @@ public class jTPCCTData {
 			stmt.setInt(7, o_all_local);
 			stmt.executeUpdate();
 
+			timeCounterNow = System.currentTimeMillis();
+			timeDelta = timeCounterNow - transStart;
+			if (timeDelta > 200) {
+				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+				if (abortPoss > 1) {
+					abortPoss = 1;
+				}
+				int poss = rnd.nextInt(1, 100);
+				if (poss < 100 * abortPoss) {
+					abort = 1;
+					//db.rollback();
+					//return;
+				}
+			}
+
 			// Insert the NEW_ORDER row
 			stmt = db.stmtNewOrderInsertNewOrder;
 			stmt.setInt(1, o_id);
 			stmt.setInt(2, newOrder.d_id);
 			stmt.setInt(3, newOrder.w_id);
 			stmt.executeUpdate();
+
+			timeCounterNow = System.currentTimeMillis();
+			timeDelta = timeCounterNow - transStart;
+			if (timeDelta > 200) {
+				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+				if (abortPoss > 1) {
+					abortPoss = 1;
+				}
+				int poss = rnd.nextInt(1, 100);
+				if (poss < 100 * abortPoss) {
+					abort = 1;
+					//db.rollback();
+					//return;
+				}
+			}
 
 			// Per ORDER_LINE
 			insertOrderLineBatch = db.stmtNewOrderInsertOrderLine;
@@ -488,6 +564,22 @@ public class jTPCCTData {
 				stmt.setInt(i * 2 + 2, newOrder.ol_i_id[seq]);
 			}
 			rs = stmt.executeQuery();
+
+			timeCounterNow = System.currentTimeMillis();
+			timeDelta = timeCounterNow - transStart;
+			if (timeDelta > 200) {
+				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+				if (abortPoss > 1) {
+					abortPoss = 1;
+				}
+				int poss = rnd.nextInt(1, 100);
+				if (poss < 100 * abortPoss) {
+					abort = 1;
+					//db.rollback();
+					//return;
+				}
+			}
+
 			while (rs.next()) {
 				int i_id = rs.getInt("s_i_id");
 				int w_id = rs.getInt("s_w_id");
@@ -542,6 +634,21 @@ public class jTPCCTData {
 				stmt.setInt(5, newOrder.ol_i_id[seq]);
 				stmt.executeUpdate();
 
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						//db.rollback();
+						//return;
+					}
+				}
+
 				// Insert the ORDER_LINE row.
 				insertOrderLineBatch.setInt(1, o_id);
 				insertOrderLineBatch.setInt(2, newOrder.d_id);
@@ -557,11 +664,27 @@ public class jTPCCTData {
 
 			// All done ... execute the batches.
 			insertOrderLineBatch.executeBatch();
+
+			timeCounterNow = System.currentTimeMillis();
+			timeDelta = timeCounterNow - transStart;
+			if (timeDelta > 200) {
+				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+				if (abortPoss > 1) {
+					abortPoss = 1;
+				}
+				int poss = rnd.nextInt(1, 100);
+				if (poss < 100 * abortPoss) {
+					abort = 1;
+					//db.rollback();
+					// return;
+				}
+			}
+
 			insertOrderLineBatch.clearBatch();
 
 			newOrder.execution_status = new String("Order placed");
 			newOrder.total_amount = total_amount;
-			transVal_real = total_amount*0.9;
+			transVal_real = total_amount * 0.9;
 			db.commit();
 
 		} catch (SQLException se) {
@@ -572,7 +695,7 @@ public class jTPCCTData {
 
 			try {
 				db.stmtNewOrderInsertOrderLine.clearBatch();
-				db.rollback();
+				//db.rollback();
 			} catch (SQLException se2) {
 				throw new Exception("Unexpected SQLException on rollback: " +
 						se2.getMessage());
@@ -580,7 +703,7 @@ public class jTPCCTData {
 		} catch (Exception e) {
 			try {
 				db.stmtNewOrderInsertOrderLine.clearBatch();
-				db.rollback();
+				//db.rollback();
 			} catch (SQLException se2) {
 				throw new Exception("Unexpected SQLException on rollback: " +
 						se2.getMessage());
@@ -730,12 +853,12 @@ public class jTPCCTData {
 
 		// 2.5.1.3
 		payment.h_amount = ((double) rnd.nextLong(100, 500000)) / 100.0;
-		transVal_pre = payment.h_amount;//根据客户付款金额确定价值。
-		
-		transPrio = 1+(int)(transVal_pre/675);
+		transVal_pre = payment.h_amount;// 根据客户付款金额确定价值。
+
+		transPrio = 1 + (int) (transVal_pre / 675);
 	}
 
-	private void executePayment(Logger log, jTPCCConnection db)
+	private void executePayment(Logger log, jTPCCConnection db, jTPCCRandom rnd)
 			throws Exception {
 		PreparedStatement stmt;
 		ResultSet rs;
@@ -751,14 +874,41 @@ public class jTPCCTData {
 			stmt.setInt(3, payment.d_id);
 			stmt.executeUpdate();
 
+			timeCounterNow = System.currentTimeMillis();
+			timeDelta = timeCounterNow - transStart;
+			if (timeDelta > 200) {
+				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+				if (abortPoss > 1) {
+					abortPoss = 1;
+				}
+				int poss = rnd.nextInt(1, 100);
+				if (poss < 100 * abortPoss) {
+					abort = 1;
+					//db.rollback();
+					//return;
+				}
+			}
+
 			// Select the DISTRICT.
 			stmt = db.stmtPaymentSelectDistrict;
 			stmt.setInt(1, payment.w_id);
 			stmt.setInt(2, payment.d_id);
 			rs = stmt.executeQuery();
+
 			timeCounterNow = System.currentTimeMillis();
 			timeDelta = timeCounterNow - transStart;
-			if()
+			if (timeDelta > 200) {
+				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+				if (abortPoss > 1) {
+					abortPoss = 1;
+				}
+				int poss = rnd.nextInt(1, 100);
+				if (poss < 100 * abortPoss) {
+					abort = 1;
+					//db.rollback();
+					//return;
+				}
+			}
 			if (!rs.next()) {
 				rs.close();
 				throw new Exception("District for" +
@@ -779,10 +929,41 @@ public class jTPCCTData {
 			stmt.setInt(2, payment.w_id);
 			stmt.executeUpdate();
 
+			timeCounterNow = System.currentTimeMillis();
+			timeDelta = timeCounterNow - transStart;
+			if (timeDelta > 200) {
+				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+				if (abortPoss > 1) {
+					abortPoss = 1;
+				}
+				int poss = rnd.nextInt(1, 100);
+				if (poss < 100 * abortPoss) {
+					abort = 1;
+					//db.rollback();
+					//return;
+				}
+			}
+
 			// Select the WAREHOUSE.
 			stmt = db.stmtPaymentSelectWarehouse;
 			stmt.setInt(1, payment.w_id);
 			rs = stmt.executeQuery();
+
+			timeCounterNow = System.currentTimeMillis();
+			timeDelta = timeCounterNow - transStart;
+			if (timeDelta > 200) {
+				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+				if (abortPoss > 1) {
+					abortPoss = 1;
+				}
+				int poss = rnd.nextInt(1, 100);
+				if (poss < 100 * abortPoss) {
+					abort = 1;
+					//db.rollback();
+					//return;
+				}
+			}
+
 			if (!rs.next()) {
 				rs.close();
 				throw new Exception("Warehouse for" +
@@ -803,6 +984,22 @@ public class jTPCCTData {
 				stmt.setInt(2, payment.c_d_id);
 				stmt.setString(3, payment.c_last);
 				rs = stmt.executeQuery();
+
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						//db.rollback();
+						//return;
+					}
+				}
+
 				while (rs.next())
 					c_id_list.add(rs.getInt("c_id"));
 				rs.close();
@@ -823,6 +1020,22 @@ public class jTPCCTData {
 			stmt.setInt(2, payment.c_d_id);
 			stmt.setInt(3, payment.c_id);
 			rs = stmt.executeQuery();
+
+			timeCounterNow = System.currentTimeMillis();
+			timeDelta = timeCounterNow - transStart;
+			if (timeDelta > 200) {
+				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.017;
+				if (abortPoss > 1) {
+					abortPoss = 1;
+				}
+				int poss = rnd.nextInt(1, 100);
+				if (poss < 100 * abortPoss) {
+					abort = 1;
+					//db.rollback();
+					//return;
+				}
+			}
+
 			if (!rs.next()) {
 				throw new Exception("Customer for" +
 						" C_W_ID=" + payment.c_w_id +
@@ -851,7 +1064,7 @@ public class jTPCCTData {
 			payment.c_balance -= payment.h_amount;
 			if (payment.c_credit.equals("GC")) {
 				// Customer with good credit, don't update C_DATA.
-				transVal_real = transVal_real*0.9;
+				transVal_real = transVal_real * 0.9;
 				stmt = db.stmtPaymentUpdateCustomer;
 				stmt.setDouble(1, payment.h_amount);
 				stmt.setDouble(2, payment.h_amount);
@@ -859,6 +1072,21 @@ public class jTPCCTData {
 				stmt.setInt(4, payment.c_d_id);
 				stmt.setInt(5, payment.c_id);
 				stmt.executeUpdate();
+
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.017;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						//db.rollback();
+						//return;
+					}
+				}
 			} else {
 				// Customer with bad credit, need to do the C_DATA work.
 				stmt = db.stmtPaymentSelectCustomerData;
@@ -866,6 +1094,22 @@ public class jTPCCTData {
 				stmt.setInt(2, payment.c_d_id);
 				stmt.setInt(3, payment.c_id);
 				rs = stmt.executeQuery();
+
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.017;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						//db.rollback();
+						//return;
+					}
+				}
+
 				if (!rs.next()) {
 					throw new Exception("Customer.c_data for" +
 							" C_W_ID=" + payment.c_w_id +
@@ -895,6 +1139,21 @@ public class jTPCCTData {
 				stmt.setInt(5, payment.c_d_id);
 				stmt.setInt(6, payment.c_id);
 				stmt.executeUpdate();
+
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.017;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						//db.rollback();
+						//return;
+					}
+				}
 			}
 
 			// Insert the HISORY row.
@@ -908,6 +1167,21 @@ public class jTPCCTData {
 			stmt.setDouble(7, payment.h_amount);
 			stmt.setString(8, payment.w_name + "    " + payment.d_name);
 			stmt.executeUpdate();
+
+			timeCounterNow = System.currentTimeMillis();
+			timeDelta = timeCounterNow - transStart;
+			if(timeDelta>200){
+				abortPoss = (timeDelta-200)/(0.1*200)*0.017;
+				if(abortPoss>1){
+					abortPoss = 1;
+				}
+				int poss = rnd.nextInt(1, 100);
+				if(poss<100*abortPoss){
+					abort = 1;
+					//db.rollback();
+					//return;
+				}
+			}
 
 			payment.h_date = new Timestamp(h_date).toString();
 
@@ -1071,7 +1345,7 @@ public class jTPCCTData {
 		delivery = null;
 		deliveryBG = null;
 
-		transPrio = (int)(transVal_pre/675);// change 11.13
+		transPrio = (int) (transVal_pre / 675);// change 11.13
 		orderStatus.w_id = terminalWarehouse;
 		orderStatus.d_id = rnd.nextInt(1, 10);
 		if (rnd.nextInt(1, 100) <= 60) {
@@ -1284,8 +1558,8 @@ public class jTPCCTData {
 		transRbk = false;
 		transError = null;
 		transGeneratime = System.currentTimeMillis();
-		transVal_pre = 675*5;
-		transVal_real = 675*5;
+		transVal_pre = 675 * 5;
+		transVal_real = 675 * 5;
 
 		newOrder = null;
 		payment = null;
@@ -1294,7 +1568,7 @@ public class jTPCCTData {
 		delivery = null;
 		deliveryBG = null;
 
-		transPrio = 5;//change 11.13
+		transPrio = 5;// change 11.13
 		stockLevel.w_id = terminalWarehouse;
 		stockLevel.d_id = terminalDistrict;
 		stockLevel.threshold = rnd.nextInt(10, 20);
@@ -1393,7 +1667,7 @@ public class jTPCCTData {
 		delivery = new DeliveryData();
 		deliveryBG = null;
 
-		transPrio = (int)(transVal_pre/675);//change 11.13
+		transPrio = (int) (transVal_pre / 675);// change 11.13
 		delivery.w_id = terminalWarehouse;
 		delivery.o_carrier_id = rnd.nextInt(1, 10);
 		delivery.execution_status = null;

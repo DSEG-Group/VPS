@@ -158,7 +158,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		{
 		    term.generatePayment(log, rnd, 0);
 		    term.traceScreen(log);
-		    term.execute(log, db);
+		    term.execute(log, db, rnd);
 			transVal = term.getTransVal_real();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
@@ -186,7 +186,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		{
 		    term.generateStockLevel(log, rnd, 0);
 		    term.traceScreen(log);
-		    term.execute(log, db);
+		    term.execute(log, db, rnd);
 			transVal = term.getTransVal_real();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
@@ -213,7 +213,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		{
 		    term.generateOrderStatus(log, rnd, 0);
 		    term.traceScreen(log);
-		    term.execute(log, db);
+		    term.execute(log, db, rnd);
 			transVal = term.getTransVal_real();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
@@ -240,7 +240,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		{
 		    term.generateDelivery(log, rnd, 0);
 		    term.traceScreen(log);
-		    term.execute(log, db);
+		    term.execute(log, db, rnd);
 			transVal = term.getTransVal_real();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
@@ -252,7 +252,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		     */
 		    jTPCCTData  bg = term.getDeliveryBG();
 		    bg.traceScreen(log);
-		    bg.execute(log, db);
+		    bg.execute(log, db, rnd);
 		    parent.resultAppend(bg);
 		    bg.traceScreen(log);
 
@@ -280,7 +280,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		{
 		    term.generateNewOrder(log, rnd, 0);
 		    term.traceScreen(log);
-		    term.execute(log, db);
+		    term.execute(log, db, rnd);
 			transVal = term.getTransVal_real();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
