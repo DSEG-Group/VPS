@@ -28,6 +28,7 @@ public class jTPCCConnection
     public PreparedStatement    stmtNewOrderSelectItemBatch[];
     public PreparedStatement    stmtNewOrderUpdateStock;
     public PreparedStatement    stmtNewOrderInsertOrderLine;
+	public PreparedStatement    stmtNewOrderUpdateCustomer;
 
     public PreparedStatement    stmtPaymentSelectWarehouse;
     public PreparedStatement    stmtPaymentSelectDistrict;
@@ -39,6 +40,10 @@ public class jTPCCConnection
     public PreparedStatement    stmtPaymentUpdateCustomer;
     public PreparedStatement    stmtPaymentUpdateCustomerWithData;
     public PreparedStatement    stmtPaymentInsertHistory;
+	public PreparedStatement    stmtPaymentSelectNewOrder;
+	public PreparedStatement    stmtPaymentUpdateNewOrder;
+	public PreparedStatement	stmtPaymentSelectOorderData;
+	public PreparedStatement    stmtPaymentSelectOrderLineAmount;
 
     public PreparedStatement    stmtOrderStatusSelectCustomerListByLast;
     public PreparedStatement    stmtOrderStatusSelectCustomer;
@@ -55,12 +60,21 @@ public class jTPCCConnection
     public PreparedStatement    stmtDeliveryBGUpdateOrderLine;
     public PreparedStatement    stmtDeliveryBGUpdateCustomer;
 
+	public PreparedStatement	stmtSetPriorityHigh;
+	public PreparedStatement	stmtSetPriorityLow;
+	public PreparedStatement	stmtSetPriorityNormal;
+
     public jTPCCConnection(Connection dbConn, int dbType)
 	throws SQLException
     {
 	this.dbConn = dbConn;
 	this.dbType = dbType;
 	
+	stmtSetPriorityHigh = dbConn.prepareStatement("SET TRANSACTION PRIORITY HIGH");
+	stmtSetPriorityLow = dbConn.prepareStatement("SET TRANSACTION PRIORITY LOW");
+	stmtSetPriorityNormal = dbConn.prepareStatement("SET TRANSACTION PRIORITY NORMAL");
+
+
 	stmtNewOrderSelectStockBatch = new PreparedStatement[16];
 	String st = "SELECT s_i_id, s_w_id, s_quantity, s_data, " +
 				"       s_dist_01, s_dist_02, s_dist_03, s_dist_04, " +
@@ -104,8 +118,8 @@ public class jTPCCConnection
 		"VALUES (?, ?, ?, ?, ?, ?, ?)");
 	stmtNewOrderInsertNewOrder = dbConn.prepareStatement(
 		"INSERT INTO bmsql_new_order (" +
-		"    no_o_id, no_d_id, no_w_id) " +
-		"VALUES (?, ?, ?)");
+		"    no_o_id, no_d_id, no_w_id, no_p_flag) " +
+		"VALUES (?, ?, ?, 0)");
 	stmtNewOrderSelectStock = dbConn.prepareStatement(
 		"SELECT s_quantity, s_data, " +
 		"       s_dist_01, s_dist_02, s_dist_03, s_dist_04, " +
@@ -130,8 +144,28 @@ public class jTPCCConnection
 		"    ol_i_id, ol_supply_w_id, ol_quantity, " +
 		"    ol_amount, ol_dist_info) " +
 		"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+	stmtNewOrderUpdateCustomer = dbConn.prepareStatement(
+		"UPDATE bmsql_customer " +
+		"    SET c_balance = c_balance + ? " +
+		"    WHERE c_w_id = ? AND c_d_id = ? AND c_id = ?");
 
 	// PreparedStatements for PAYMENT
+	stmtPaymentSelectNewOrder = dbConn.prepareStatement(
+		"SELECT no_o_id, no_w_id, no_d_id"+
+		"   FROM bmsql_new_order "+
+		"   WHERE no_p_flag = 0 ");	
+	stmtPaymentUpdateNewOrder = dbConn.prepareStatement(
+		"UPDATE bmsql_new_order"+
+		"    SET no_p_flag = 1"+
+		"    WHERE no_o_id = ? AND no_w_id = ? AND no_d_id = ?");
+	stmtPaymentSelectOorderData = dbConn.prepareStatement(
+		"SELECT o_c_id"+
+		"	FROM bmsql_oorder"+
+		"	WHERE o_id = ? AND o_w_id = ? AND o_d_id = ?");
+	stmtPaymentSelectOrderLineAmount = dbConn.prepareStatement(
+		"SELECT ol_amount"+
+		"	FROM bmsql_order_line"+
+		"	WHERE ol_o_id = ? AND ol_w_id = ? AND ol_d_id = ?");
 	stmtPaymentSelectWarehouse = dbConn.prepareStatement(
 		"SELECT w_name, w_street_1, w_street_2, w_city, " +
 		"       w_state, w_zip " +
@@ -210,6 +244,7 @@ public class jTPCCConnection
 	// PreparedStatements for STOCK_LEVEL
 	switch (dbType)
 	{
+		case jTPCCConfig.DB_COCKROACH:
 	    case jTPCCConfig.DB_POSTGRES:
 	    case jTPCCConfig.DB_MYSQL:
 		stmtStockLevelSelectLow = dbConn.prepareStatement(
@@ -251,7 +286,7 @@ public class jTPCCConnection
     stmtDeliveryBGSelectOldestNewOrder = dbConn.prepareStatement(
         "SELECT no_o_id " +
         "    FROM bmsql_new_order " +
-        "    WHERE no_w_id = ? AND no_d_id = ? " +
+        "    WHERE no_w_id = ? AND no_d_id = ? AND no_p_flag = 1" +
         "    ORDER BY no_o_id ASC" +
         "    LIMIT 1" +
         "    FOR UPDATE");
@@ -293,8 +328,7 @@ public class jTPCCConnection
 
 	stmtDeliveryBGUpdateCustomer = dbConn.prepareStatement(
 		"UPDATE bmsql_customer " +
-		"    SET c_balance = c_balance + ?, " +
-		"        c_delivery_cnt = c_delivery_cnt + 1 " +
+		"    SET c_delivery_cnt = c_delivery_cnt + 1 " +
 		"    WHERE c_w_id = ? AND c_d_id = ? AND c_id = ?");
     }
 
@@ -319,4 +353,8 @@ public class jTPCCConnection
     {
 	dbConn.rollback();
     }
+
+	public int getdbtype(){
+		return this.dbType;
+	}
 }

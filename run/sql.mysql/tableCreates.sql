@@ -67,7 +67,7 @@ create table bmsql_history (
   h_d_id   integer,
   h_w_id   integer,
   h_date   timestamp,
-  h_amount decimal(6,2),
+  h_amount decimal(10,2),
   h_data   varchar(24)
 );
 
@@ -75,6 +75,7 @@ create table bmsql_new_order (
   no_w_id  integer   not null,
   no_d_id  integer   not null,
   no_o_id  integer   not null,
+  no_p_flag integer   not null,
  constraint pk_new_order primary key (no_w_id, no_d_id, no_o_id)
 );
 
@@ -98,7 +99,7 @@ create table bmsql_order_line (
   ol_number       integer   not null,
   ol_i_id         integer   not null,
   ol_delivery_d   timestamp,
-  ol_amount       decimal(6,2),
+  ol_amount       decimal(10,2),
   ol_supply_w_id  integer,
   ol_quantity     integer,
   ol_dist_info    char(24),
@@ -108,7 +109,7 @@ create table bmsql_order_line (
 create table bmsql_item (
   i_id     integer      not null,
   i_name   varchar(24),
-  i_price  decimal(5,2),
+  i_price  decimal(8,2),
   i_data   varchar(50),
   i_im_id  integer,
   constraint pk_item primary key (i_id)

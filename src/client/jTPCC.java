@@ -122,6 +122,8 @@ public class jTPCC implements jTPCCConfig {
 			dbType = DB_POSTGRES;
 		else if (iDB.equals("mysql"))
 			dbType = DB_MYSQL;
+		else if (iDB.equals("cockroach"))
+			dbType = DB_COCKROACH;
 		else {
 			log.error("unknown database type '" + iDB + "'");
 			return;
@@ -221,7 +223,7 @@ public class jTPCC implements jTPCCConfig {
 			try {
 				resultCSV = new BufferedWriter(new FileWriter(resultCSVName));
 				resultCSV.write("run,transGenerateTime,transStart,elapsed,latency,dblatency," +
-						"ttype,rbk,dskipped,Value_pre,Value_real,abort,Prioity,error\n");
+						"ttype,rbk,dskipped,Value_real,abort,Prioity,error\n");
 			} catch (IOException e) {
 				log.error(e.getMessage());
 				System.exit(1);
@@ -328,7 +330,8 @@ public class jTPCC implements jTPCCConfig {
 
 				try {
 					numTerminals = Integer.parseInt(iTerminals);
-					if(numTerminals <= 0 || numTerminals > 10*numWarehouses)
+					// if(numTerminals <= 0 || numTerminals > 10*numWarehouses)
+					if(numTerminals <= 0)
 					throw new NumberFormatException();
 				} catch (NumberFormatException e1) {
 					errorMessage("Invalid number of terminals!");
@@ -495,6 +498,7 @@ public class jTPCC implements jTPCCConfig {
 
 				catch (Exception e1) {
 					errorMessage("This session ended with errors!");
+					e1.printStackTrace();
 					printStreamReport.close();
 					fileOutputStream.close();
 
@@ -609,13 +613,16 @@ public class jTPCC implements jTPCCConfig {
 		double tpmC = (6000000 * fastNewOrderCounter / (currTimeMillis - sessionStartTimestamp)) / 100.0;
 		double tpmTotal = (6000000 * transactionCount / (currTimeMillis - sessionStartTimestamp)) / 100.0;
 		double vpmTotal = (6000000 * transValCount / (currTimeMillis - sessionStartTimestamp)) / 100.0;// change 11.13
-
+		double vpsTotal = vpmTotal/60;
+		double tpsTotal = tpmTotal/60;
 		System.out.println("");
 		log.info("Term-00, ");
 		log.info("Term-00, ");
 		log.info("Term-00, Measured tpmC (NewOrders) = " + tpmC);
 		log.info("Term-00, Measured tpmTOTAL = " + tpmTotal);
 		log.info("Term-00, Measured vpmTotal = " + vpmTotal);
+		log.info("Term-00, Measured tpsTotal = " + tpsTotal);
+		log.info("Term-00, Measured vpsTotal = " + vpsTotal);
 		log.info("Term-00, Session Start     = " + sessionStart);
 		log.info("Term-00, Session End       = " + sessionEnd);
 		log.info("Term-00, Value Count = " + transValCount);// change 11.13

@@ -11,8 +11,24 @@ import org.apache.log4j.*;
 import java.util.*;
 import java.sql.*;
 
+
+
 public class jTPCCTData {
 	protected int numWarehouses = 0;
+	
+	private 	  int with_prio = 0;
+	private 	  int timecounter = 1;
+
+	public final static int DB_UNKNOWN = 0,
+			DB_FIREBIRD = 1,
+			DB_ORACLE = 2,
+			DB_POSTGRES = 3,
+			DB_MYSQL = 4,
+			DB_COCKROACH = 5;
+
+	public final static int HIGH_PRIO = 2,
+			NORMAL_PRIO = 1,
+			LOW_PRIO = 0;
 
 	public final static int TT_NEW_ORDER = 0,
 			TT_PAYMENT = 1,
@@ -32,6 +48,11 @@ public class jTPCCTData {
 	public jTPCCTData term_right;
 	public int tree_height;
 	private int abort = 0;
+	private int extreme_high_value_rate = 1;
+	private int high_value_rate = 19;
+	private int normal_value_rate = 40;
+	private int low_value_rate = 40;
+	private int priority = 0;
 
 	private int transType;
 	private long transDue;
@@ -39,9 +60,7 @@ public class jTPCCTData {
 	private long transEnd;
 	private boolean transRbk;
 	private String transError;
-	private int transPrio = 0;// change 11.13
 	private long transGeneratime = 0;
-	private double transVal_pre;
 	private double transVal_real;
 	private long timeDelta;// 时差
 	private double abortPoss;
@@ -118,16 +137,6 @@ public class jTPCCTData {
 		}
 
 		transEnd = System.currentTimeMillis();
-	}
-
-	public int getTransPrio()// change 11.13
-			throws Exception {
-		return this.transPrio;
-	}
-
-	public double getTransVal_pre()
-			throws Exception {
-		return this.transVal_pre;
 	}
 
 	public double getTransVal_real()
@@ -225,7 +234,7 @@ public class jTPCCTData {
 	public String resultLine(long sessionStart) {
 		String line;
 
-		resultFmt.format("%d,%d,%d,%d,%d,%s,%d,%d,%.2f,%.2f,%d,%d,%d\n",
+		resultFmt.format("%d,%d,%d,%d,%d,%s,%d,%d,%.2f,%d,%d\n",
 				transGeneratime - sessionStart,
 				transStart - sessionStart,
 				transEnd - sessionStart,
@@ -234,10 +243,9 @@ public class jTPCCTData {
 				transTypeNames[transType],
 				(transRbk) ? 1 : 0,
 				(transType == TT_DELIVERY_BG) ? getSkippedDeliveries() : 0,
-				transVal_pre,
 				transVal_real,
 				abort,
-				transPrio,
+				priority,
 				(transError == null) ? 0 : 1);
 		line = resultSB.toString();
 		resultSB.setLength(0);
@@ -274,23 +282,40 @@ public class jTPCCTData {
 		newOrder.c_id = rnd.getCustomerID();
 		o_ol_cnt = rnd.nextInt(5, 15); // 2.4.1.3
 
-		transVal_pre = 0;// 根据物品单价由1-100不等，因此设置平均单价为50，因此该下单事务的价值为下单物品数量*50
+		int value_level = rnd.nextInt(1, 100);
+
 		transVal_real = 0;
-		while (i < o_ol_cnt) // 2.4.1.5
+		while (i < o_ol_cnt) // 2.4.1.5 调整order的分布。
 		{
-			newOrder.ol_i_id[i] = rnd.getItemID();
+			if (value_level < this.extreme_high_value_rate) {
+				newOrder.ol_i_id[i] = rnd.getItemExtremeHighValueID();
+				priority = HIGH_PRIO;
+			} else {
+				if (value_level > this.extreme_high_value_rate &&
+						value_level < this.high_value_rate + this.extreme_high_value_rate) {
+					newOrder.ol_i_id[i] = rnd.getItemHighValueID();
+					priority = HIGH_PRIO;
+				} else {
+					if (value_level > this.high_value_rate + this.extreme_high_value_rate &&
+							value_level < this.high_value_rate + this.extreme_high_value_rate
+									+ this.normal_value_rate) {
+						newOrder.ol_i_id[i] = rnd.getNormalValueID();
+						priority = NORMAL_PRIO;
+					} else {
+						newOrder.ol_i_id[i] = rnd.getLowValueID();
+						priority = LOW_PRIO;
+					}
+				}
+			}
 			if (rnd.nextInt(1, 100) <= 99)
 				newOrder.ol_supply_w_id[i] = terminalWarehouse;
 			else
 				newOrder.ol_supply_w_id[i] = rnd.nextInt(1, numWarehouses);
 			newOrder.ol_quantity[i] = rnd.nextInt(1, 10);
-			transVal_pre += newOrder.ol_quantity[i] * 50;
 			newOrder.found[i] = false;
 			i++;
 		}
 
-		transVal_pre = transVal_pre * 0.9;
-		transPrio = 1 + (int) (transVal_pre / 675);
 		if (rnd.nextInt(1, 100) == 1) // 2.4.1.4
 		{
 			newOrder.ol_i_id[i - 1] += (rnd.nextInt(1, 9) * 1000000);
@@ -318,13 +343,14 @@ public class jTPCCTData {
 		long o_entry_d;
 		int ol_cnt;
 		double total_amount = 0.0;
+		int dbType;
 
 		int ol_seq[] = new int[15];
-
+				
 		// The o_entry_d is now.
 		o_entry_d = System.currentTimeMillis();
 		newOrder.o_entry_d = new Timestamp(o_entry_d).toString();
-
+		dbType = db.getdbtype();
 		/*
 		 * When processing the order lines we must select the STOCK rows
 		 * FOR UPDATE. This is because we must perform business logic
@@ -361,26 +387,50 @@ public class jTPCCTData {
 
 		// The above also provided the output value for o_ol_cnt;
 		newOrder.o_ol_cnt = ol_cnt;
-
+		dbType = db.getdbtype();
 		try {
+			if(with_prio == 1){
+				if(dbType == DB_COCKROACH){
+					switch (priority) {
+						case HIGH_PRIO:
+							stmt = db.stmtSetPriorityHigh;
+							stmt.execute();
+							break;
+						case NORMAL_PRIO:
+							stmt = db.stmtSetPriorityNormal;
+							stmt.execute();
+							break;
+						case LOW_PRIO:
+							stmt = db.stmtSetPriorityLow;
+							stmt.execute();
+							break;
+						default:
+							break;
+					}
+				}
+			}
+
 			// Retrieve the required data from DISTRICT
 			stmt = db.stmtNewOrderSelectDist;
 			stmt.setInt(1, newOrder.w_id);
 			stmt.setInt(2, newOrder.d_id);
 			rs = stmt.executeQuery();
 
-			timeCounterNow = System.currentTimeMillis();
-			timeDelta = timeCounterNow - transStart;
-			if (timeDelta > 200) {
-				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
-				if (abortPoss > 1) {
-					abortPoss = 1;
-				}
-				int poss = rnd.nextInt(1, 100);
-				if (poss < 100 * abortPoss) {
-					abort = 1;
-					//db.rollback();
-					//return;
+			if(timecounter == 1){
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						rs.close();
+						db.rollback();
+						return;
+					}
 				}
 			}
 
@@ -402,20 +452,24 @@ public class jTPCCTData {
 			stmt.setInt(3, newOrder.c_id);
 			rs = stmt.executeQuery();
 
-			timeCounterNow = System.currentTimeMillis();
-			timeDelta = timeCounterNow - transStart;
-			if (timeDelta > 200) {
-				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
-				if (abortPoss > 1) {
-					abortPoss = 1;
-				}
-				int poss = rnd.nextInt(1, 100);
-				if (poss < 100 * abortPoss) {
-					abort = 1;
-					//db.rollback();
-					//return;
+			if(timecounter == 1){
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						rs.close();
+						db.rollback();
+						return;
+					}
 				}
 			}
+
 
 			if (!rs.next()) {
 				rs.close();
@@ -436,18 +490,20 @@ public class jTPCCTData {
 			stmt.setInt(2, newOrder.d_id);
 			stmt.executeUpdate();
 
-			timeCounterNow = System.currentTimeMillis();
-			timeDelta = timeCounterNow - transStart;
-			if (timeDelta > 200) {
-				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
-				if (abortPoss > 1) {
-					abortPoss = 1;
-				}
-				int poss = rnd.nextInt(1, 100);
-				if (poss < 100 * abortPoss) {
-					abort = 1;
-					//db.rollback();
-					//return;
+			if(timecounter == 1){
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						db.rollback();
+						return;
+					}
 				}
 			}
 
@@ -462,18 +518,20 @@ public class jTPCCTData {
 			stmt.setInt(7, o_all_local);
 			stmt.executeUpdate();
 
-			timeCounterNow = System.currentTimeMillis();
-			timeDelta = timeCounterNow - transStart;
-			if (timeDelta > 200) {
-				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
-				if (abortPoss > 1) {
-					abortPoss = 1;
-				}
-				int poss = rnd.nextInt(1, 100);
-				if (poss < 100 * abortPoss) {
-					abort = 1;
-					//db.rollback();
-					//return;
+			if(timecounter == 1){
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						db.rollback();
+						return;
+					}
 				}
 			}
 
@@ -484,18 +542,20 @@ public class jTPCCTData {
 			stmt.setInt(3, newOrder.w_id);
 			stmt.executeUpdate();
 
-			timeCounterNow = System.currentTimeMillis();
-			timeDelta = timeCounterNow - transStart;
-			if (timeDelta > 200) {
-				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
-				if (abortPoss > 1) {
-					abortPoss = 1;
-				}
-				int poss = rnd.nextInt(1, 100);
-				if (poss < 100 * abortPoss) {
-					abort = 1;
-					//db.rollback();
-					//return;
+			if(timecounter == 1){
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						db.rollback();
+						return;
+					}
 				}
 			}
 
@@ -520,6 +580,25 @@ public class jTPCCTData {
 				stmt.setInt(i_idx, x.intValue());
 			}
 			rs = stmt.executeQuery();
+
+			if(timecounter == 1){
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						rs.close();
+						db.rollback();
+						return;
+					}
+				}
+			}
+
 			while (rs.next()) {
 				int i_id = rs.getInt("i_id");
 				NewOrderItem item = new NewOrderItem();
@@ -565,18 +644,21 @@ public class jTPCCTData {
 			}
 			rs = stmt.executeQuery();
 
-			timeCounterNow = System.currentTimeMillis();
-			timeDelta = timeCounterNow - transStart;
-			if (timeDelta > 200) {
-				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
-				if (abortPoss > 1) {
-					abortPoss = 1;
-				}
-				int poss = rnd.nextInt(1, 100);
-				if (poss < 100 * abortPoss) {
-					abort = 1;
-					//db.rollback();
-					//return;
+			if(timecounter == 1){
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						rs.close();
+						db.rollback();
+						return;
+					}
 				}
 			}
 
@@ -634,20 +716,21 @@ public class jTPCCTData {
 				stmt.setInt(5, newOrder.ol_i_id[seq]);
 				stmt.executeUpdate();
 
-				timeCounterNow = System.currentTimeMillis();
-				timeDelta = timeCounterNow - transStart;
-				if (timeDelta > 200) {
-					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
-					if (abortPoss > 1) {
-						abortPoss = 1;
-					}
-					int poss = rnd.nextInt(1, 100);
-					if (poss < 100 * abortPoss) {
-						abort = 1;
-						//db.rollback();
-						//return;
-					}
-				}
+				// timeCounterNow = System.currentTimeMillis();
+				// timeDelta = timeCounterNow - transStart;
+				// if (timeDelta > 200) {
+				// 	abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+				// 	if (abortPoss > 1) {
+				// 		abortPoss = 1;
+				// 	}
+				// 	int poss = rnd.nextInt(1, 100);
+				// 	if (poss < 100 * abortPoss) {
+				// 		abort = 1;
+				// 		db.rollback();
+				// 		insertOrderLineBatch.clearBatch();
+				// 		return;
+				// 	}
+				// }
 
 				// Insert the ORDER_LINE row.
 				insertOrderLineBatch.setInt(1, o_id);
@@ -665,18 +748,20 @@ public class jTPCCTData {
 			// All done ... execute the batches.
 			insertOrderLineBatch.executeBatch();
 
-			timeCounterNow = System.currentTimeMillis();
-			timeDelta = timeCounterNow - transStart;
-			if (timeDelta > 200) {
-				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
-				if (abortPoss > 1) {
-					abortPoss = 1;
-				}
-				int poss = rnd.nextInt(1, 100);
-				if (poss < 100 * abortPoss) {
-					abort = 1;
-					//db.rollback();
-					// return;
+			if(timecounter == 1){
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						db.rollback();
+						return;
+					}
 				}
 			}
 
@@ -684,26 +769,35 @@ public class jTPCCTData {
 
 			newOrder.execution_status = new String("Order placed");
 			newOrder.total_amount = total_amount;
-			transVal_real = total_amount * 0.9;
+			transVal_real = total_amount;
+
+			stmt = db.stmtNewOrderUpdateCustomer;
+			stmt.setDouble(1,newOrder.total_amount);
+			stmt.setInt(2,newOrder.w_id);
+			stmt.setInt(3,newOrder.d_id);
+			stmt.setInt(4,newOrder.c_id);
+			stmt.executeUpdate();
+
 			db.commit();
 
 		} catch (SQLException se) {
 			log.error("Unexpected SQLException in NEW_ORDER");
 			for (SQLException x = se; x != null; x = x.getNextException())
 				log.error(x.getMessage());
+			System.out.println(priority);
 			se.printStackTrace();
-
+			
 			try {
+				db.rollback();
 				db.stmtNewOrderInsertOrderLine.clearBatch();
-				//db.rollback();
 			} catch (SQLException se2) {
 				throw new Exception("Unexpected SQLException on rollback: " +
 						se2.getMessage());
 			}
 		} catch (Exception e) {
 			try {
+				db.rollback();
 				db.stmtNewOrderInsertOrderLine.clearBatch();
-				//db.rollback();
 			} catch (SQLException se2) {
 				throw new Exception("Unexpected SQLException on rollback: " +
 						se2.getMessage());
@@ -823,7 +917,6 @@ public class jTPCCTData {
 		transRbk = false;
 		transError = null;
 		transGeneratime = System.currentTimeMillis();
-		transVal_pre = 0;
 		transVal_real = 0;
 
 		newOrder = null;
@@ -834,39 +927,198 @@ public class jTPCCTData {
 		deliveryBG = null;
 
 		// change 11.13
-		payment.w_id = terminalWarehouse; // 2.5.1.1
-		payment.d_id = rnd.nextInt(1, 10); // 2.5.1.2
-		payment.c_w_id = payment.w_id;
-		payment.c_d_id = payment.d_id;
-		if (rnd.nextInt(1, 100) > 85) {
-			payment.c_d_id = rnd.nextInt(1, 10);
-			while (payment.c_w_id == payment.w_id && numWarehouses > 1)
-				payment.c_w_id = rnd.nextInt(1, numWarehouses);
-		}
-		if (rnd.nextInt(1, 100) <= 60) {
-			payment.c_last = rnd.getCLast();
-			payment.c_id = 0;
-		} else {
-			payment.c_last = null;
-			payment.c_id = rnd.getCustomerID();
-		}
+		// payment.w_id = terminalWarehouse; // 2.5.1.1
+		// payment.d_id = rnd.nextInt(1, 10); // 2.5.1.2
+		// payment.c_w_id = payment.w_id;
+		// payment.c_d_id = payment.d_id;
+		// if (rnd.nextInt(1, 100) > 85) {
+		// 	payment.c_d_id = rnd.nextInt(1, 10);
+		// 	while (payment.c_w_id == payment.w_id && numWarehouses > 1)
+		// 		payment.c_w_id = rnd.nextInt(1, numWarehouses);
+		// }
+		// if (rnd.nextInt(1, 100) <= 60) {
+		// 	payment.c_last = rnd.getCLast();
+		// 	payment.c_id = 0;
+		// } else {
+		// 	payment.c_last = null;
+		// 	payment.c_id = rnd.getCustomerID();
+		// }
 
-		// 2.5.1.3
-		payment.h_amount = ((double) rnd.nextLong(100, 500000)) / 100.0;
-		transVal_pre = payment.h_amount;// 根据客户付款金额确定价值。
-
-		transPrio = 1 + (int) (transVal_pre / 675);
+		// // 2.5.1.3
+		// payment.h_amount = ((double) rnd.nextLong(100, 1000000)) / 100.0;
+		// if (payment.h_amount<10000/3){
+		// 	priority = LOW_PRIO;
+		// }
+		// else if (payment.h_amount>10000/3*2){
+		// 	priority = HIGH_PRIO;
+		// }
+		// else{
+		// 	priority = NORMAL_PRIO;
+		// }
+		payment.h_amount = 0;
 	}
 
 	private void executePayment(Logger log, jTPCCConnection db, jTPCCRandom rnd)
 			throws Exception {
 		PreparedStatement stmt;
 		ResultSet rs;
-		Vector<Integer> c_id_list = new Vector<Integer>();
+		// Vector<Integer> c_id_list = new Vector<Integer>();
+		Vector<Integer> o_id_list = new Vector<Integer>();
+		Vector<Integer>	w_id_list = new Vector<Integer>();
+		Vector<Integer>	d_id_list = new Vector<Integer>();
+		int order_length = 0;
+		int randIndex;
 
 		long h_date = System.currentTimeMillis();
-		transVal_real = payment.h_amount;
+		
+		int dbType;
+		dbType = db.getdbtype();
 		try {
+			if(with_prio == 1){
+				if(dbType == DB_COCKROACH){
+					switch (priority) {
+						case HIGH_PRIO:
+							stmt = db.stmtSetPriorityHigh;
+							break;
+						case NORMAL_PRIO:
+							stmt = db.stmtSetPriorityNormal;
+							break;
+						case LOW_PRIO:
+							stmt = db.stmtSetPriorityLow;
+							break;
+						default:
+							stmt = db.stmtSetPriorityLow;
+							break;
+					}
+					stmt.execute();
+				}
+			}
+
+			//Select the unpay order
+			stmt = db.stmtPaymentSelectNewOrder;
+			rs = stmt.executeQuery();
+
+			if(timecounter == 1){
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						rs.close();
+						db.rollback();
+						return;
+					}
+				}
+			}
+
+
+			while (rs.next()) {
+				o_id_list.add(rs.getInt("no_o_id"));
+				w_id_list.add(rs.getInt("no_w_id"));
+				d_id_list.add(rs.getInt("no_d_id"));
+				order_length++;
+			}
+			if (order_length == 0) {
+				rs.close();
+				throw new Exception("Unpay Order not found");
+			}
+			rs.close();
+			randIndex = rnd.nextInt(0, order_length-1);
+			payment.o_id = o_id_list.get(randIndex);
+			payment.w_id = w_id_list.get(randIndex);
+			payment.d_id = d_id_list.get(randIndex);
+
+			stmt = db.stmtPaymentSelectOorderData;
+			stmt.setInt(1, payment.o_id);
+			stmt.setInt(2, payment.w_id);
+			stmt.setInt(3, payment.d_id);
+			rs = stmt.executeQuery();
+
+			if(timecounter == 1){
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						rs.close();
+						db.rollback();
+						return;
+					}
+				}
+			}
+
+			if (!rs.next()) {
+				throw new Exception("Oorder.o_c_id for" +
+						" W_ID=" + payment.c_w_id +
+						" D_ID=" + payment.c_d_id +
+						" O_ID=" + payment.o_id + " not found");
+			}
+			payment.c_id = rs.getInt("o_c_id");
+			rs.close();
+
+			stmt = db.stmtPaymentUpdateNewOrder;
+			stmt.setInt(1, payment.o_id);
+			stmt.setInt(2, payment.w_id);
+			stmt.setInt(3, payment.d_id);
+			stmt.executeUpdate();
+
+			if(timecounter == 1){
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						db.rollback();
+						return;
+					}
+				}
+			}
+
+			stmt = db.stmtPaymentSelectOrderLineAmount;
+			stmt.setInt(1, payment.o_id);
+			stmt.setInt(2, payment.w_id);
+			stmt.setInt(3, payment.d_id);
+			rs = stmt.executeQuery();
+
+			if(timecounter == 1){
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						rs.close();
+						db.rollback();
+						return;
+					}
+				}
+			}
+
+			while(rs.next()){
+				payment.h_amount+=rs.getInt("ol_amount");
+			}
+			
+			transVal_real = payment.h_amount;
+			
 			// Update the DISTRICT.
 			stmt = db.stmtPaymentUpdateDistrict;
 			stmt.setDouble(1, payment.h_amount);
@@ -874,18 +1126,20 @@ public class jTPCCTData {
 			stmt.setInt(3, payment.d_id);
 			stmt.executeUpdate();
 
-			timeCounterNow = System.currentTimeMillis();
-			timeDelta = timeCounterNow - transStart;
-			if (timeDelta > 200) {
-				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
-				if (abortPoss > 1) {
-					abortPoss = 1;
-				}
-				int poss = rnd.nextInt(1, 100);
-				if (poss < 100 * abortPoss) {
-					abort = 1;
-					//db.rollback();
-					//return;
+			if(timecounter == 1){
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						db.rollback();
+						return;
+					}
 				}
 			}
 
@@ -895,20 +1149,23 @@ public class jTPCCTData {
 			stmt.setInt(2, payment.d_id);
 			rs = stmt.executeQuery();
 
-			timeCounterNow = System.currentTimeMillis();
-			timeDelta = timeCounterNow - transStart;
-			if (timeDelta > 200) {
-				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
-				if (abortPoss > 1) {
-					abortPoss = 1;
-				}
-				int poss = rnd.nextInt(1, 100);
-				if (poss < 100 * abortPoss) {
-					abort = 1;
-					//db.rollback();
-					//return;
+			if(timecounter == 1){
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						db.rollback();
+						return;
+					}
 				}
 			}
+
 			if (!rs.next()) {
 				rs.close();
 				throw new Exception("District for" +
@@ -929,18 +1186,20 @@ public class jTPCCTData {
 			stmt.setInt(2, payment.w_id);
 			stmt.executeUpdate();
 
-			timeCounterNow = System.currentTimeMillis();
-			timeDelta = timeCounterNow - transStart;
-			if (timeDelta > 200) {
-				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
-				if (abortPoss > 1) {
-					abortPoss = 1;
-				}
-				int poss = rnd.nextInt(1, 100);
-				if (poss < 100 * abortPoss) {
-					abort = 1;
-					//db.rollback();
-					//return;
+			if(timecounter == 1){
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						db.rollback();
+						return;
+					}
 				}
 			}
 
@@ -949,18 +1208,21 @@ public class jTPCCTData {
 			stmt.setInt(1, payment.w_id);
 			rs = stmt.executeQuery();
 
-			timeCounterNow = System.currentTimeMillis();
-			timeDelta = timeCounterNow - transStart;
-			if (timeDelta > 200) {
-				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
-				if (abortPoss > 1) {
-					abortPoss = 1;
-				}
-				int poss = rnd.nextInt(1, 100);
-				if (poss < 100 * abortPoss) {
-					abort = 1;
-					//db.rollback();
-					//return;
+			if(timecounter == 1){
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						rs.close();
+						db.rollback();
+						return;
+					}
 				}
 			}
 
@@ -978,13 +1240,55 @@ public class jTPCCTData {
 			rs.close();
 
 			// If C_LAST is given instead of C_ID (60%), determine the C_ID.
-			if (payment.c_last != null) {
-				stmt = db.stmtPaymentSelectCustomerListByLast;
-				stmt.setInt(1, payment.c_w_id);
-				stmt.setInt(2, payment.c_d_id);
-				stmt.setString(3, payment.c_last);
-				rs = stmt.executeQuery();
+			// if (payment.c_last != null) {
+			// 	stmt = db.stmtPaymentSelectCustomerListByLast;
+			// 	stmt.setInt(1, payment.c_w_id);
+			// 	stmt.setInt(2, payment.c_d_id);
+			// 	stmt.setString(3, payment.c_last);
+			// 	rs = stmt.executeQuery();
 
+			// 	if(timecounter == 1){
+			// 		timeCounterNow = System.currentTimeMillis();
+			// 		timeDelta = timeCounterNow - transStart;
+			// 		if (timeDelta > 200) {
+			// 			abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+			// 			if (abortPoss > 1) {
+			// 				abortPoss = 1;
+			// 			}
+			// 			int poss = rnd.nextInt(1, 100);
+			// 			if (poss < 100 * abortPoss) {
+			// 				abort = 1;
+			// 				db.rollback();
+			// 				return;
+			// 			}
+			// 		}
+			// 	}
+
+			// 	while (rs.next())
+			// 		c_id_list.add(rs.getInt("c_id"));
+			// 	rs.close();
+
+			// 	if (c_id_list.size() == 0) {
+			// 		throw new Exception("Customer(s) for" +
+			// 				" C_W_ID=" + payment.c_w_id +
+			// 				" C_D_ID=" + payment.c_d_id +
+			// 				" C_LAST=" + payment.c_last + " not found");
+			// 	}
+
+			// 	payment.c_id = c_id_list.get((c_id_list.size() + 1) / 2 - 1);
+			// }
+
+			
+			// Select the CUSTOMER.
+			payment.c_w_id = payment.w_id;
+			payment.c_d_id = payment.d_id;
+			stmt = db.stmtPaymentSelectCustomer;
+			stmt.setInt(1, payment.c_w_id);
+			stmt.setInt(2, payment.c_d_id);
+			stmt.setInt(3, payment.c_id);
+			rs = stmt.executeQuery();
+
+			if(timecounter == 1){
 				timeCounterNow = System.currentTimeMillis();
 				timeDelta = timeCounterNow - transStart;
 				if (timeDelta > 200) {
@@ -995,44 +1299,10 @@ public class jTPCCTData {
 					int poss = rnd.nextInt(1, 100);
 					if (poss < 100 * abortPoss) {
 						abort = 1;
-						//db.rollback();
-						//return;
+						rs.close();
+						db.rollback();
+						return;
 					}
-				}
-
-				while (rs.next())
-					c_id_list.add(rs.getInt("c_id"));
-				rs.close();
-
-				if (c_id_list.size() == 0) {
-					throw new Exception("Customer(s) for" +
-							" C_W_ID=" + payment.c_w_id +
-							" C_D_ID=" + payment.c_d_id +
-							" C_LAST=" + payment.c_last + " not found");
-				}
-
-				payment.c_id = c_id_list.get((c_id_list.size() + 1) / 2 - 1);
-			}
-
-			// Select the CUSTOMER.
-			stmt = db.stmtPaymentSelectCustomer;
-			stmt.setInt(1, payment.c_w_id);
-			stmt.setInt(2, payment.c_d_id);
-			stmt.setInt(3, payment.c_id);
-			rs = stmt.executeQuery();
-
-			timeCounterNow = System.currentTimeMillis();
-			timeDelta = timeCounterNow - transStart;
-			if (timeDelta > 200) {
-				abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.017;
-				if (abortPoss > 1) {
-					abortPoss = 1;
-				}
-				int poss = rnd.nextInt(1, 100);
-				if (poss < 100 * abortPoss) {
-					abort = 1;
-					//db.rollback();
-					//return;
 				}
 			}
 
@@ -1073,20 +1343,23 @@ public class jTPCCTData {
 				stmt.setInt(5, payment.c_id);
 				stmt.executeUpdate();
 
-				timeCounterNow = System.currentTimeMillis();
-				timeDelta = timeCounterNow - transStart;
-				if (timeDelta > 200) {
-					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.017;
-					if (abortPoss > 1) {
-						abortPoss = 1;
-					}
-					int poss = rnd.nextInt(1, 100);
-					if (poss < 100 * abortPoss) {
-						abort = 1;
-						//db.rollback();
-						//return;
+				if(timecounter == 1){
+					timeCounterNow = System.currentTimeMillis();
+					timeDelta = timeCounterNow - transStart;
+					if (timeDelta > 200) {
+						abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+						if (abortPoss > 1) {
+							abortPoss = 1;
+						}
+						int poss = rnd.nextInt(1, 100);
+						if (poss < 100 * abortPoss) {
+							abort = 1;
+							db.rollback();
+							return;
+						}
 					}
 				}
+
 			} else {
 				// Customer with bad credit, need to do the C_DATA work.
 				stmt = db.stmtPaymentSelectCustomerData;
@@ -1095,18 +1368,21 @@ public class jTPCCTData {
 				stmt.setInt(3, payment.c_id);
 				rs = stmt.executeQuery();
 
-				timeCounterNow = System.currentTimeMillis();
-				timeDelta = timeCounterNow - transStart;
-				if (timeDelta > 200) {
-					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.017;
-					if (abortPoss > 1) {
-						abortPoss = 1;
-					}
-					int poss = rnd.nextInt(1, 100);
-					if (poss < 100 * abortPoss) {
-						abort = 1;
-						//db.rollback();
-						//return;
+				if(timecounter == 1){
+					timeCounterNow = System.currentTimeMillis();
+					timeDelta = timeCounterNow - transStart;
+					if (timeDelta > 200) {
+						abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+						if (abortPoss > 1) {
+							abortPoss = 1;
+						}
+						int poss = rnd.nextInt(1, 100);
+						if (poss < 100 * abortPoss) {
+							abort = 1;
+							rs.close();
+							db.rollback();
+							return;
+						}
 					}
 				}
 
@@ -1140,18 +1416,20 @@ public class jTPCCTData {
 				stmt.setInt(6, payment.c_id);
 				stmt.executeUpdate();
 
-				timeCounterNow = System.currentTimeMillis();
-				timeDelta = timeCounterNow - transStart;
-				if (timeDelta > 200) {
-					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.017;
-					if (abortPoss > 1) {
-						abortPoss = 1;
-					}
-					int poss = rnd.nextInt(1, 100);
-					if (poss < 100 * abortPoss) {
-						abort = 1;
-						//db.rollback();
-						//return;
+				if(timecounter == 1){
+					timeCounterNow = System.currentTimeMillis();
+					timeDelta = timeCounterNow - transStart;
+					if (timeDelta > 200) {
+						abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+						if (abortPoss > 1) {
+							abortPoss = 1;
+						}
+						int poss = rnd.nextInt(1, 100);
+						if (poss < 100 * abortPoss) {
+							abort = 1;
+							db.rollback();
+							return;
+						}
 					}
 				}
 			}
@@ -1168,18 +1446,20 @@ public class jTPCCTData {
 			stmt.setString(8, payment.w_name + "    " + payment.d_name);
 			stmt.executeUpdate();
 
-			timeCounterNow = System.currentTimeMillis();
-			timeDelta = timeCounterNow - transStart;
-			if(timeDelta>200){
-				abortPoss = (timeDelta-200)/(0.1*200)*0.017;
-				if(abortPoss>1){
-					abortPoss = 1;
-				}
-				int poss = rnd.nextInt(1, 100);
-				if(poss<100*abortPoss){
-					abort = 1;
-					//db.rollback();
-					//return;
+			if(timecounter == 1){
+				timeCounterNow = System.currentTimeMillis();
+				timeDelta = timeCounterNow - transStart;
+				if (timeDelta > 200) {
+					abortPoss = (timeDelta - 200) / (0.1 * 200) * 0.008;
+					if (abortPoss > 1) {
+						abortPoss = 1;
+					}
+					int poss = rnd.nextInt(1, 100);
+					if (poss < 100 * abortPoss) {
+						abort = 1;
+						db.rollback();
+						return;
+					}
 				}
 			}
 
@@ -1319,6 +1599,8 @@ public class jTPCCTData {
 		public double c_balance;
 		public String c_data;
 		public String h_date;
+		public int o_id;
+		public int o_ol_cnt;
 	}
 
 	/*
@@ -1335,7 +1617,6 @@ public class jTPCCTData {
 		transRbk = false;
 		transError = null;
 		transGeneratime = System.currentTimeMillis();
-		transVal_pre = 1;
 		transVal_real = 1;
 
 		newOrder = null;
@@ -1345,7 +1626,6 @@ public class jTPCCTData {
 		delivery = null;
 		deliveryBG = null;
 
-		transPrio = (int) (transVal_pre / 675);// change 11.13
 		orderStatus.w_id = terminalWarehouse;
 		orderStatus.d_id = rnd.nextInt(1, 10);
 		if (rnd.nextInt(1, 100) <= 60) {
@@ -1363,8 +1643,17 @@ public class jTPCCTData {
 		ResultSet rs;
 		Vector<Integer> c_id_list = new Vector<Integer>();
 		int ol_idx = 0;
+		int dbType;
+		dbType = db.getdbtype();
 
 		try {
+			if(with_prio == 1){
+				if(dbType == DB_COCKROACH){
+					stmt = db.stmtSetPriorityLow;
+					stmt.execute();
+				}
+			}
+
 			// If C_LAST is given instead of C_ID (60%), determine the C_ID.
 			if (orderStatus.c_last != null) {
 				stmt = db.stmtOrderStatusSelectCustomerListByLast;
@@ -1558,7 +1847,6 @@ public class jTPCCTData {
 		transRbk = false;
 		transError = null;
 		transGeneratime = System.currentTimeMillis();
-		transVal_pre = 675 * 5;
 		transVal_real = 675 * 5;
 
 		newOrder = null;
@@ -1568,7 +1856,6 @@ public class jTPCCTData {
 		delivery = null;
 		deliveryBG = null;
 
-		transPrio = 5;// change 11.13
 		stockLevel.w_id = terminalWarehouse;
 		stockLevel.d_id = terminalDistrict;
 		stockLevel.threshold = rnd.nextInt(10, 20);
@@ -1578,8 +1865,14 @@ public class jTPCCTData {
 			throws Exception {
 		PreparedStatement stmt;
 		ResultSet rs;
-
+		int dbType = db.getdbtype();
 		try {
+			if(with_prio == 1){
+				if(dbType == DB_COCKROACH){
+					stmt = db.stmtSetPriorityLow;
+					stmt.execute();
+				}
+			}
 			stmt = db.stmtStockLevelSelectLow;
 			stmt.setInt(1, stockLevel.w_id);
 			stmt.setInt(2, stockLevel.threshold);
@@ -1657,7 +1950,6 @@ public class jTPCCTData {
 		transRbk = false;
 		transError = null;
 		transGeneratime = System.currentTimeMillis();
-		transVal_pre = 0;
 		transVal_real = 0;
 
 		newOrder = null;
@@ -1667,7 +1959,6 @@ public class jTPCCTData {
 		delivery = new DeliveryData();
 		deliveryBG = null;
 
-		transPrio = (int) (transVal_pre / 675);// change 11.13
 		delivery.w_id = terminalWarehouse;
 		delivery.o_carrier_id = rnd.nextInt(1, 10);
 		delivery.execution_status = null;
@@ -1753,7 +2044,6 @@ public class jTPCCTData {
 		transEnd = 0;
 		transRbk = false;
 		transError = null;
-		transVal_pre = 1;
 		transVal_real = 1;
 		transGeneratime = System.currentTimeMillis();
 
@@ -1773,7 +2063,7 @@ public class jTPCCTData {
 		deliveryBG.sum_ol_amount = new double[10];
 		for (int i = 0; i < 10; i++) {
 			deliveryBG.delivered_o_id[i] = -1;
-			deliveryBG.sum_ol_amount[i] = -1.0;
+			deliveryBG.sum_ol_amount[i] = 0;
 			deliveryBG.delivered_c_id[i] = -1;
 		}
 	}
@@ -1789,8 +2079,14 @@ public class jTPCCTData {
 		int c_id;
 		double sum_ol_amount;
 		long now = System.currentTimeMillis();
-
+		int dbType = db.getdbtype();
 		try {
+			if(with_prio == 1){
+				if(dbType == DB_COCKROACH){
+					stmt1 = db.stmtSetPriorityLow;
+					stmt1.execute();
+				}
+			}
 			for (d_id = 1; d_id <= 10; d_id++) {
 				o_id = -1;
 
@@ -1907,18 +2203,17 @@ public class jTPCCTData {
 					continue;
 				}
 				double ans = deliveryBG.sum_ol_amount[d_id - 1];
-				if (ans < 0) {
-					throw new Exception("sum(OL_AMOUNT) for ORDER_LINEs with " +
-							" OL_W_ID=" + deliveryBG.w_id +
-							" OL_D_ID=" + d_id +
-							" OL_O_ID=" + o_id + " not found");
-				}
+				// if (ans < 0) {
+				// 	throw new Exception("sum(OL_AMOUNT) for ORDER_LINEs with " +
+				// 			" OL_W_ID=" + deliveryBG.w_id +
+				// 			" OL_D_ID=" + d_id +
+				// 			" OL_O_ID=" + o_id + " not found");
+				// }
 				c_id = deliveryBG.delivered_c_id[d_id - 1];
 				stmt1 = db.stmtDeliveryBGUpdateCustomer;
-				stmt1.setDouble(1, ans);
-				stmt1.setInt(2, deliveryBG.w_id);
-				stmt1.setInt(3, d_id);
-				stmt1.setInt(4, c_id);
+				stmt1.setInt(1, deliveryBG.w_id);
+				stmt1.setInt(2, d_id);
+				stmt1.setInt(3, c_id);
 				stmt1.executeUpdate();
 				// Recored the delivered O_ID in the DELIVERY_BG
 			}

@@ -25,6 +25,11 @@ public class LoadDataWorker implements Runnable
     private boolean             writeCSV = false;
     private String              csvNull = null;
 
+	private int 				high_value_rate = 19;
+	private int					extreme_high_value_rate = 1;
+	private int 				low_value_rate = 40;
+	private int 				normal_value_rate = 40;
+
     private PreparedStatement   stmtConfig = null;
     private PreparedStatement   stmtItem = null;
     private PreparedStatement   stmtWarehouse = null;
@@ -62,6 +67,11 @@ public class LoadDataWorker implements Runnable
 	this.worker             = worker;
 	this.csvNull            = csvNull;
 	this.rnd                = rnd;
+	// this.extreme_high_value_rate = extreme_high_value_rate;
+	// this.high_value_rate 	= high_value_rate;
+	// this.normal_value_rate 	= normal_value_rate;
+	// this.low_value_rate 	= low_value_rate;
+
 
 	this.sb                 = new StringBuffer();
 	this.fmt                = new Formatter(sb);
@@ -158,8 +168,8 @@ public class LoadDataWorker implements Runnable
 	    );
 	stmtNewOrder = dbConn.prepareStatement(
 		"INSERT INTO bmsql_new_order (" +
-		"  no_w_id, no_d_id, no_o_id) " +
-		"VALUES (?, ?, ?)"
+		"  no_w_id, no_d_id, no_o_id, no_p_flag) " +
+		"VALUES (?, ?, ?, ?)"
 	    );
     }
 
@@ -320,7 +330,23 @@ public class LoadDataWorker implements Runnable
 	    {
 		stmtItem.setInt(1, i_id);
 		stmtItem.setString(2, rnd.getAString(14, 24));
-		stmtItem.setDouble(3, ((double)rnd.nextLong(100, 10000)) / 100.0);//can set the weight of the high value item.
+		if(i_id<100000*this.extreme_high_value_rate/100){
+			stmtItem.setDouble(3, ((double)rnd.nextLong(200000, 5000000)) / 100.0);//can set the weight of the high value item.
+		}
+		else{
+			if(i_id>100000*this.extreme_high_value_rate/100&&i_id<100000*(this.high_value_rate+this.extreme_high_value_rate)/100){
+				stmtItem.setDouble(3, ((double)rnd.nextLong(20000, 80000)) / 100.0);
+			}//can set the weight of the high value item.
+			else{
+				if(i_id>100000*(this.high_value_rate+this.extreme_high_value_rate)/100&&i_id<100000*(this.high_value_rate+this.extreme_high_value_rate+this.normal_value_rate)/100){
+					stmtItem.setDouble(3, ((double)rnd.nextLong(4000, 8000)) / 100.0);
+				}
+				else{
+					stmtItem.setDouble(3, ((double)rnd.nextLong(100, 4000)) / 100.0);
+				}
+			}
+		}
+		
 		stmtItem.setString(4, iData);
 		stmtItem.setInt(5, rnd.nextInt(1, 10000));
 
@@ -786,6 +812,7 @@ public class LoadDataWorker implements Runnable
 			stmtNewOrder.setInt(1, w_id);
 			stmtNewOrder.setInt(2, d_id);
 			stmtNewOrder.setInt(3, o_id);
+			stmtNewOrder.setInt(4,1);
 
 			stmtNewOrder.addBatch();
 		    }

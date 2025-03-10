@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+export JAVA_HOME=/home/dseg/Desktop/lyb/tpcc/JDK8
+export PATH=$PATH:$JAVA_HOME/bin
+
 if [ $# -ne 1 ] ; then
     echo "usage: $(basename $0) PROPS_FILE" >&2
     exit 2

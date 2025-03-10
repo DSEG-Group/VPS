@@ -41,7 +41,7 @@ public class jTPCCRandom {
         if (initialized)
             throw new IllegalStateException("Global instance exists");
 
-        this.random = new Random(System.currentTimeMillis());// 设置固定种子
+        this.random = new Random(42);// 设置固定种子
         jTPCCRandom.nURandCLast = nextLong(0, 255);
         jTPCCRandom.nURandCC_ID = nextLong(0, 1023);
         jTPCCRandom.nURandCI_ID = nextLong(0, 8191);
@@ -67,7 +67,7 @@ public class jTPCCRandom {
         if (initialized)
             throw new IllegalStateException("Global instance exists");
 
-        this.random = new Random(System.currentTimeMillis());// 设置固定种子
+        this.random = new Random(42);// 设置固定种子
         jTPCCRandom.nURandCC_ID = nextLong(0, 1023);
         jTPCCRandom.nURandCI_ID = nextLong(0, 8191);
 
@@ -86,7 +86,8 @@ public class jTPCCRandom {
     }
 
     private jTPCCRandom(jTPCCRandom parent) {
-        this.random = new Random(System.currentTimeMillis());// 设置固定种子
+        // this.random = new Random(System.currentTimeMillis());// 设置固定种子
+        this.random = new Random(42);
     }
 
     /*
@@ -178,6 +179,26 @@ public class jTPCCRandom {
     public int getItemID() {
         return (int) ((((nextLong(0, 8191) | nextLong(1, 100000)) + nURandCI_ID)
                 % 100000) + 1);
+    }
+
+    public int getItemExtremeHighValueID(){
+        return (int) ((((nextLong(0, 8191) | nextLong(1, 1000)) + nURandCI_ID)
+        % 1000) + 1);
+    }
+
+    public int getItemHighValueID(){
+        return (int) ((((nextLong(0, 8191) | nextLong(1, 19000)) + nURandCI_ID)
+        % 19000) + 1001);
+    }
+
+    public int getNormalValueID(){
+        return  (int) ((((nextLong(0, 8191) | nextLong(1, 40000)) + nURandCI_ID)
+        % 40000) + 20001);
+    }
+
+    public int getLowValueID(){
+        return  (int) ((((nextLong(0, 8191) | nextLong(1, 40000)) + nURandCI_ID)
+        % 40000) + 60001);
     }
 
     /*
