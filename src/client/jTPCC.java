@@ -10,6 +10,7 @@ package client;/*
 import OSCollector.OSCollector;
 import org.apache.log4j.*;
 
+
 import java.io.*;
 import java.nio.file.*;
 import java.sql.*;
@@ -22,6 +23,7 @@ public class jTPCC implements jTPCCConfig {
 	private static String resultDirName = null;
 	private static BufferedWriter resultCSV = null;
 	private static BufferedWriter runInfoCSV = null;
+	private static BufferedWriter resultSQL = null;
 	private static int runID = 0;
 
 	private int dbType = DB_UNKNOWN;
@@ -107,6 +109,8 @@ public class jTPCC implements jTPCCConfig {
 		String iOrderStatusWeight = getProp(ini, "orderStatusWeight");
 		String iDeliveryWeight = getProp(ini, "deliveryWeight");
 		String iStockLevelWeight = getProp(ini, "stockLevelWeight");
+
+
 
 		log.info("Term-00, ");
 		String resultDirectory = getProp(ini, "resultDirectory");
@@ -230,6 +234,17 @@ public class jTPCC implements jTPCCConfig {
 			}
 			log.info("Term-00, writing per transaction results to " +
 					resultCSVName);
+
+			// Open the per transaction result.sql file
+			String resultSQLName = new File(resultDataDir, "result.sql").getPath();
+			try {
+				resultSQL = new BufferedWriter(new FileWriter(resultSQLName));
+				resultSQL.write("run,transGenerateTime,transStart,elapsed,latency,dblatency," +
+						"ttype,rbk,dskipped,Value_real,abort,Prioity,error\n");
+			} catch (IOException e) {
+				log.error(e.getMessage());
+				System.exit(1);
+			}
 
 			if (osCollectorScript != null) {
 				osCollector = new OSCollector(getProp(ini, "osCollectorScript"),
@@ -561,6 +576,15 @@ public class jTPCC implements jTPCCConfig {
 				;
 			}
 
+			if (resultSQL != null) {
+				try {
+					resultSQL.close();
+				} catch (IOException e) {
+					log.error(e.getMessage());
+				}
+				;
+			}
+
 			// Stop the OSCollector, if it is active.
 			if (osCollector != null) {
 				osCollector.stop();
@@ -570,9 +594,10 @@ public class jTPCC implements jTPCCConfig {
 	}
 
 	public void signalTerminalEndedTransaction(String terminalName, String transactionType, long executionTime,
-			String comment, int newOrder, double transVal) {
+			String comment, int newOrder, double transVal, int is_abort) {
 		synchronized (counterLock) {
-			transactionCount++;
+			if(is_abort!=1){
+				transactionCount++;
 			transValCount += transVal;// change 11.13
 			fastNewOrderCounter += newOrder;
 			Long counter = costPerWorkerload.get(transactionType);
@@ -580,6 +605,7 @@ public class jTPCC implements jTPCCConfig {
 				costPerWorkerload.put(transactionType, Long.valueOf(executionTime));
 			} else {
 				costPerWorkerload.put(transactionType, counter + executionTime);
+			}
 			}
 		}
 
@@ -600,6 +626,7 @@ public class jTPCC implements jTPCCConfig {
 			try {
 				resultCSV.write(runID + "," +
 						term.resultLine(sessionStartTimestamp));
+				resultSQL.write(term.SQLLine(sessionStartTimestamp));
 			} catch (IOException e) {
 				log.error("Term-00, " + e.getMessage());
 			}

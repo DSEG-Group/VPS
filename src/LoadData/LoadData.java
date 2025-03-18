@@ -26,6 +26,10 @@ public class LoadData
     private static int          numWarehouses;
     private static int          numWorkers;
     private static int          nextJob = 0;
+	private static int ExtremeHighWeight;
+	private static int HighWeight;
+	private static int NormalWeight;
+	private static int LowWeight;
     private static Object       nextJobLock = new Object();
 
     private static LoadDataWorker[] workers;
@@ -95,6 +99,12 @@ public class LoadData
 	numWorkers      = iniGetInt("loadWorkers", 4);
 	fileLocation    = iniGetString("fileLocation");
 	csvNullValue    = iniGetString("csvNullValue", "NULL");
+
+	// ExtremeHighWeight = iniGetInt("ExtremeHighWeight");
+	// HighWeight = iniGetInt("HighWeight");
+	// NormalWeight = iniGetInt("NormalWeight");
+	// LowWeight = iniGetInt("LowWeight");
+
 
 	/*
 	 * If CSV files are requested, open them all.

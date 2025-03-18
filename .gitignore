@@ -29,9 +29,7 @@ bin/
 .DS_Store
 
 run/my_result*
-build/
 doc/
-lib/
 build.xml
 README
 README.md

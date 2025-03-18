@@ -53,6 +53,7 @@ public class jTPCCTData {
 	private int normal_value_rate = 40;
 	private int low_value_rate = 40;
 	private int priority = 0;
+	private String SQLString = "";
 
 	private int transType;
 	private long transDue;
@@ -252,6 +253,12 @@ public class jTPCCTData {
 		return line;
 	}
 
+	public String SQLLine(long sessionStart){
+		SQLString = "BEGIN;\n" + SQLString;
+		SQLString += "COMMIT;\n";
+		return SQLString;
+	}
+
 	/*
 	 * **********************************************************************
 	 * **********************************************************************
@@ -287,17 +294,17 @@ public class jTPCCTData {
 		transVal_real = 0;
 		while (i < o_ol_cnt) // 2.4.1.5 调整order的分布。
 		{
-			if (value_level < this.extreme_high_value_rate) {
+			if (value_level <= this.extreme_high_value_rate) {
 				newOrder.ol_i_id[i] = rnd.getItemExtremeHighValueID();
 				priority = HIGH_PRIO;
 			} else {
 				if (value_level > this.extreme_high_value_rate &&
-						value_level < this.high_value_rate + this.extreme_high_value_rate) {
+						value_level <= this.high_value_rate + this.extreme_high_value_rate) {
 					newOrder.ol_i_id[i] = rnd.getItemHighValueID();
 					priority = HIGH_PRIO;
 				} else {
 					if (value_level > this.high_value_rate + this.extreme_high_value_rate &&
-							value_level < this.high_value_rate + this.extreme_high_value_rate
+							value_level <= this.high_value_rate + this.extreme_high_value_rate
 									+ this.normal_value_rate) {
 						newOrder.ol_i_id[i] = rnd.getNormalValueID();
 						priority = NORMAL_PRIO;
@@ -414,6 +421,9 @@ public class jTPCCTData {
 			stmt = db.stmtNewOrderSelectDist;
 			stmt.setInt(1, newOrder.w_id);
 			stmt.setInt(2, newOrder.d_id);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			rs = stmt.executeQuery();
 
 			if(timecounter == 1){
@@ -450,6 +460,9 @@ public class jTPCCTData {
 			stmt.setInt(1, newOrder.w_id);
 			stmt.setInt(2, newOrder.d_id);
 			stmt.setInt(3, newOrder.c_id);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			rs = stmt.executeQuery();
 
 			if(timecounter == 1){
@@ -488,6 +501,7 @@ public class jTPCCTData {
 			stmt = db.stmtNewOrderUpdateDist;
 			stmt.setInt(1, newOrder.w_id);
 			stmt.setInt(2, newOrder.d_id);
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
 			stmt.executeUpdate();
 
 			if(timecounter == 1){
@@ -516,6 +530,9 @@ public class jTPCCTData {
 			stmt.setTimestamp(5, new Timestamp(System.currentTimeMillis()));
 			stmt.setInt(6, ol_cnt);
 			stmt.setInt(7, o_all_local);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			stmt.executeUpdate();
 
 			if(timecounter == 1){
@@ -540,6 +557,9 @@ public class jTPCCTData {
 			stmt.setInt(1, o_id);
 			stmt.setInt(2, newOrder.d_id);
 			stmt.setInt(3, newOrder.w_id);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			stmt.executeUpdate();
 
 			if(timecounter == 1){
@@ -579,6 +599,9 @@ public class jTPCCTData {
 				i_idx++;
 				stmt.setInt(i_idx, x.intValue());
 			}
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			rs = stmt.executeQuery();
 
 			if(timecounter == 1){
@@ -642,6 +665,9 @@ public class jTPCCTData {
 				stmt.setInt(i * 2 + 1, newOrder.ol_supply_w_id[seq]);
 				stmt.setInt(i * 2 + 2, newOrder.ol_i_id[seq]);
 			}
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			rs = stmt.executeQuery();
 
 			if(timecounter == 1){
@@ -714,6 +740,9 @@ public class jTPCCTData {
 					stmt.setInt(3, 1);
 				stmt.setInt(4, newOrder.ol_supply_w_id[seq]);
 				stmt.setInt(5, newOrder.ol_i_id[seq]);
+
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 				stmt.executeUpdate();
 
 				// timeCounterNow = System.currentTimeMillis();
@@ -742,6 +771,7 @@ public class jTPCCTData {
 				insertOrderLineBatch.setInt(7, newOrder.ol_quantity[seq]);
 				insertOrderLineBatch.setDouble(8, newOrder.ol_amount[seq]);
 				insertOrderLineBatch.setString(9, newOrder.dist_value[seq]);
+				SQLString += insertOrderLineBatch.toString().replaceFirst("^\\S+\\s", "")+";\n";
 				insertOrderLineBatch.addBatch();
 			}
 
@@ -776,6 +806,9 @@ public class jTPCCTData {
 			stmt.setInt(2,newOrder.w_id);
 			stmt.setInt(3,newOrder.d_id);
 			stmt.setInt(4,newOrder.c_id);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			stmt.executeUpdate();
 
 			db.commit();
@@ -974,28 +1007,31 @@ public class jTPCCTData {
 		int dbType;
 		dbType = db.getdbtype();
 		try {
-			if(with_prio == 1){
-				if(dbType == DB_COCKROACH){
-					switch (priority) {
-						case HIGH_PRIO:
-							stmt = db.stmtSetPriorityHigh;
-							break;
-						case NORMAL_PRIO:
-							stmt = db.stmtSetPriorityNormal;
-							break;
-						case LOW_PRIO:
-							stmt = db.stmtSetPriorityLow;
-							break;
-						default:
-							stmt = db.stmtSetPriorityLow;
-							break;
-					}
-					stmt.execute();
-				}
-			}
+		// 	if(with_prio == 1){
+		// 		if(dbType == DB_COCKROACH){
+		// 			switch (priority) {
+		// 				case HIGH_PRIO:
+		// 					stmt = db.stmtSetPriorityHigh;
+		// 					break;
+		// 				case NORMAL_PRIO:
+		// 					stmt = db.stmtSetPriorityNormal;
+		// 					break;
+		// 				case LOW_PRIO:
+		// 					stmt = db.stmtSetPriorityLow;
+		// 					break;
+		// 				default:
+		// 					stmt = db.stmtSetPriorityLow;
+		// 					break;
+		// 			}
+		// 			stmt.execute();
+		// 		}
+		// 	}
 
 			//Select the unpay order
 			stmt = db.stmtPaymentSelectNewOrder;
+			
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			rs = stmt.executeQuery();
 
 			if(timecounter == 1){
@@ -1017,26 +1053,37 @@ public class jTPCCTData {
 			}
 
 
-			while (rs.next()) {
-				o_id_list.add(rs.getInt("no_o_id"));
-				w_id_list.add(rs.getInt("no_w_id"));
-				d_id_list.add(rs.getInt("no_d_id"));
-				order_length++;
+			// while (rs.next()) {
+			// 	o_id_list.add(rs.getInt("no_o_id"));
+			// 	w_id_list.add(rs.getInt("no_w_id"));
+			// 	d_id_list.add(rs.getInt("no_d_id"));
+			// 	order_length++;
+			// }
+			// if (order_length == 0) {
+			// 	rs.close();
+			// 	// throw new Exception("Unpay Order not found");
+			// 	return;
+			// }
+
+			if (!rs.next()) {
+				abort = 1;
+				db.rollback();
+				return;
 			}
-			if (order_length == 0) {
-				rs.close();
-				throw new Exception("Unpay Order not found");
-			}
+
+			// randIndex = rnd.nextInt(0, order_length-1);
+			payment.o_id = rs.getInt("no_o_id");
+			payment.w_id = rs.getInt("no_w_id");
+			payment.d_id = rs.getInt("no_d_id");
 			rs.close();
-			randIndex = rnd.nextInt(0, order_length-1);
-			payment.o_id = o_id_list.get(randIndex);
-			payment.w_id = w_id_list.get(randIndex);
-			payment.d_id = d_id_list.get(randIndex);
 
 			stmt = db.stmtPaymentSelectOorderData;
 			stmt.setInt(1, payment.o_id);
 			stmt.setInt(2, payment.w_id);
 			stmt.setInt(3, payment.d_id);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			rs = stmt.executeQuery();
 
 			if(timecounter == 1){
@@ -1070,6 +1117,9 @@ public class jTPCCTData {
 			stmt.setInt(1, payment.o_id);
 			stmt.setInt(2, payment.w_id);
 			stmt.setInt(3, payment.d_id);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			stmt.executeUpdate();
 
 			if(timecounter == 1){
@@ -1093,6 +1143,9 @@ public class jTPCCTData {
 			stmt.setInt(1, payment.o_id);
 			stmt.setInt(2, payment.w_id);
 			stmt.setInt(3, payment.d_id);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			rs = stmt.executeQuery();
 
 			if(timecounter == 1){
@@ -1124,6 +1177,9 @@ public class jTPCCTData {
 			stmt.setDouble(1, payment.h_amount);
 			stmt.setInt(2, payment.w_id);
 			stmt.setInt(3, payment.d_id);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			stmt.executeUpdate();
 
 			if(timecounter == 1){
@@ -1147,6 +1203,9 @@ public class jTPCCTData {
 			stmt = db.stmtPaymentSelectDistrict;
 			stmt.setInt(1, payment.w_id);
 			stmt.setInt(2, payment.d_id);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			rs = stmt.executeQuery();
 
 			if(timecounter == 1){
@@ -1184,6 +1243,9 @@ public class jTPCCTData {
 			stmt = db.stmtPaymentUpdateWarehouse;
 			stmt.setDouble(1, payment.h_amount);
 			stmt.setInt(2, payment.w_id);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			stmt.executeUpdate();
 
 			if(timecounter == 1){
@@ -1206,6 +1268,9 @@ public class jTPCCTData {
 			// Select the WAREHOUSE.
 			stmt = db.stmtPaymentSelectWarehouse;
 			stmt.setInt(1, payment.w_id);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			rs = stmt.executeQuery();
 
 			if(timecounter == 1){
@@ -1286,6 +1351,9 @@ public class jTPCCTData {
 			stmt.setInt(1, payment.c_w_id);
 			stmt.setInt(2, payment.c_d_id);
 			stmt.setInt(3, payment.c_id);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			rs = stmt.executeQuery();
 
 			if(timecounter == 1){
@@ -1341,6 +1409,9 @@ public class jTPCCTData {
 				stmt.setInt(3, payment.c_w_id);
 				stmt.setInt(4, payment.c_d_id);
 				stmt.setInt(5, payment.c_id);
+
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 				stmt.executeUpdate();
 
 				if(timecounter == 1){
@@ -1366,6 +1437,9 @@ public class jTPCCTData {
 				stmt.setInt(1, payment.c_w_id);
 				stmt.setInt(2, payment.c_d_id);
 				stmt.setInt(3, payment.c_id);
+
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 				rs = stmt.executeQuery();
 
 				if(timecounter == 1){
@@ -1414,6 +1488,9 @@ public class jTPCCTData {
 				stmt.setInt(4, payment.c_w_id);
 				stmt.setInt(5, payment.c_d_id);
 				stmt.setInt(6, payment.c_id);
+
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 				stmt.executeUpdate();
 
 				if(timecounter == 1){
@@ -1444,6 +1521,9 @@ public class jTPCCTData {
 			stmt.setTimestamp(6, new Timestamp(h_date));
 			stmt.setDouble(7, payment.h_amount);
 			stmt.setString(8, payment.w_name + "    " + payment.d_name);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			stmt.executeUpdate();
 
 			if(timecounter == 1){
@@ -1660,6 +1740,9 @@ public class jTPCCTData {
 				stmt.setInt(1, orderStatus.w_id);
 				stmt.setInt(2, orderStatus.d_id);
 				stmt.setString(3, orderStatus.c_last);
+
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 				rs = stmt.executeQuery();
 				while (rs.next())
 					c_id_list.add(rs.getInt("c_id"));
@@ -1680,6 +1763,9 @@ public class jTPCCTData {
 			stmt.setInt(1, orderStatus.w_id);
 			stmt.setInt(2, orderStatus.d_id);
 			stmt.setInt(3, orderStatus.c_id);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			rs = stmt.executeQuery();
 			if (!rs.next()) {
 				throw new Exception("Customer for" +
@@ -1699,6 +1785,9 @@ public class jTPCCTData {
 			stmt.setInt(1, orderStatus.w_id);
 			stmt.setInt(2, orderStatus.d_id);
 			stmt.setInt(3, orderStatus.c_id);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			rs = stmt.executeQuery();
 			if (!rs.next()) {
 				throw new Exception("Last Order for" +
@@ -1717,6 +1806,9 @@ public class jTPCCTData {
 			stmt.setInt(1, orderStatus.w_id);
 			stmt.setInt(2, orderStatus.d_id);
 			stmt.setInt(3, orderStatus.o_id);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			rs = stmt.executeQuery();
 			while (rs.next()) {
 				Timestamp ol_delivery_d;
@@ -1870,6 +1962,9 @@ public class jTPCCTData {
 			if(with_prio == 1){
 				if(dbType == DB_COCKROACH){
 					stmt = db.stmtSetPriorityLow;
+
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 					stmt.execute();
 				}
 			}
@@ -1878,6 +1973,9 @@ public class jTPCCTData {
 			stmt.setInt(2, stockLevel.threshold);
 			stmt.setInt(3, stockLevel.w_id);
 			stmt.setInt(4, stockLevel.d_id);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			rs = stmt.executeQuery();
 			if (!rs.next()) {
 				throw new Exception("Failed to get low-stock for" +
@@ -2084,6 +2182,9 @@ public class jTPCCTData {
 			if(with_prio == 1){
 				if(dbType == DB_COCKROACH){
 					stmt1 = db.stmtSetPriorityLow;
+
+					SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 					stmt1.execute();
 				}
 			}
@@ -2100,6 +2201,9 @@ public class jTPCCTData {
 				while (o_id < 0) {
 					stmt1.setInt(1, deliveryBG.w_id);
 					stmt1.setInt(2, d_id);
+
+					SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 					rs = stmt1.executeQuery();
 					if (!rs.next()) {
 						rs.close();
@@ -2127,6 +2231,9 @@ public class jTPCCTData {
 				stmt1.setInt(d_id * 3 - 1, d_id);
 				stmt1.setInt(d_id * 3, deliveryBG.delivered_o_id[d_id - 1]);
 			}
+
+			SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			stmt1.executeUpdate();
 
 			/*
@@ -2144,6 +2251,8 @@ public class jTPCCTData {
 				stmt1.setInt(d_id * 3 + 1, deliveryBG.delivered_o_id[d_id - 1]);
 			}
 
+			SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			stmt1.executeUpdate();
 
 			// Get the o_c_id from the ORDER.
@@ -2153,6 +2262,9 @@ public class jTPCCTData {
 				stmt1.setInt(d_id * 3 - 1, d_id);
 				stmt1.setInt(d_id * 3, deliveryBG.delivered_o_id[d_id - 1]);
 			}
+
+			SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			rs = stmt1.executeQuery();
 			while (rs.next()) {
 				d_id = rs.getInt("o_d_id");
@@ -2178,6 +2290,9 @@ public class jTPCCTData {
 				stmt1.setInt(d_id * 3, d_id);
 				stmt1.setInt(d_id * 3 + 1, deliveryBG.delivered_o_id[d_id - 1]);
 			}
+
+			SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			stmt1.executeUpdate();
 
 			// Select the sum(ol_amount) from ORDER_LINE.
@@ -2188,6 +2303,9 @@ public class jTPCCTData {
 				stmt1.setInt(d_id * 3 - 1, d_id);
 				stmt1.setInt(d_id * 3, deliveryBG.delivered_o_id[d_id - 1]);
 			}
+
+			SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 			rs = stmt1.executeQuery();
 
 			while (rs.next()) {
@@ -2214,6 +2332,9 @@ public class jTPCCTData {
 				stmt1.setInt(1, deliveryBG.w_id);
 				stmt1.setInt(2, d_id);
 				stmt1.setInt(3, c_id);
+
+				SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
 				stmt1.executeUpdate();
 				// Recored the delivered O_ID in the DELIVERY_BG
 			}
@@ -2279,5 +2400,9 @@ public class jTPCCTData {
 		public int delivered_o_id[];
 		public int delivered_c_id[];
 		public double sum_ol_amount[];
+	}
+
+	public int get_abort(){
+		return abort;
 	}
 }

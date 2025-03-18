@@ -31,6 +31,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
     private jTPCCRandom rnd;
 
 	private double transVal;//change 11.13
+	private int is_abort;
     private int transactionCount = 1;
     private int numTransactions;
     private int numWarehouses;
@@ -160,6 +161,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.traceScreen(log);
 		    term.execute(log, db, rnd);
 			transVal = term.getTransVal_real();
+			is_abort = term.get_abort();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 			
@@ -188,6 +190,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.traceScreen(log);
 		    term.execute(log, db, rnd);
 			transVal = term.getTransVal_real();
+			is_abort = term.get_abort();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 		}
@@ -215,6 +218,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.traceScreen(log);
 		    term.execute(log, db, rnd);
 			transVal = term.getTransVal_real();
+			is_abort = term.get_abort();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 		}
@@ -242,6 +246,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.traceScreen(log);
 		    term.execute(log, db, rnd);
 			transVal = term.getTransVal_real();
+			is_abort = term.get_abort();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 
@@ -282,6 +287,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.traceScreen(log);
 		    term.execute(log, db, rnd);
 			transVal = term.getTransVal_real();
+			is_abort = term.get_abort();
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 		}
@@ -299,16 +305,16 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		newOrderCounter++;
 		newOrder = 1;
 	    }
-
+		
 	    long transactionEnd = System.currentTimeMillis();
 
 	    if(!transactionTypeName.equals("Delivery"))
 	    {
-		parent.signalTerminalEndedTransaction(this.terminalName, transactionTypeName, transactionEnd - transactionStart, null, newOrder,transVal);//change 11.13
+		parent.signalTerminalEndedTransaction(this.terminalName, transactionTypeName, transactionEnd - transactionStart, null, newOrder,transVal,is_abort);//change 11.13
 	    }
 	    else
 	    {
-		parent.signalTerminalEndedTransaction(this.terminalName, transactionTypeName, transactionEnd - transactionStart, (skippedDeliveries == 0 ? "None" : "" + skippedDeliveries + " delivery(ies) skipped."), newOrder,transVal);//change 11.13
+		parent.signalTerminalEndedTransaction(this.terminalName, transactionTypeName, transactionEnd - transactionStart, (skippedDeliveries == 0 ? "None" : "" + skippedDeliveries + " delivery(ies) skipped."), newOrder,transVal,is_abort);//change 11.13
 	    }
 
 	    if(limPerMin_Terminal>0){
