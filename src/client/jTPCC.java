@@ -433,11 +433,11 @@ public class jTPCC implements jTPCCConfig {
 					for (int i = 0; i < numTerminals; i++) {
 						int terminalWarehouseID;
 						int terminalDistrictID;
-						do {
+						// do {
 							terminalWarehouseID = rnd.nextInt(1, numWarehouses);
 							terminalDistrictID = rnd.nextInt(1, 10);
-						} while (usedTerminals[terminalWarehouseID - 1][terminalDistrictID - 1] == 1);
-						usedTerminals[terminalWarehouseID - 1][terminalDistrictID - 1] = 1;
+						// } while (usedTerminals[terminalWarehouseID - 1][terminalDistrictID - 1] == 1);
+						// usedTerminals[terminalWarehouseID - 1][terminalDistrictID - 1] = 1;
 
 						String terminalName = "Term-" + (i >= 9 ? "" + (i + 1) : "0" + (i + 1));
 						Connection conn = null;
