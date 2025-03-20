@@ -3,22 +3,38 @@
 export JAVA_HOME=/home/dseg/Desktop/lyb/tpcc/JDK8
 export PATH=$PATH:$JAVA_HOME/bin
 
-if [ $# -ne 1 ] ; then
-    echo "usage: $(basename $0) PROPS_FILE" >&2
-    exit 2
-fi
+FILES=(
+    "my_mysql.properties"
+    "my_cockroachdb.properties"
+    "my_postgres.properties"
+)
 
-SEQ_FILE="./.jTPCC_run_seq.dat"
-if [ ! -f "${SEQ_FILE}" ] ; then
-    echo "0" > "${SEQ_FILE}"
-fi
-SEQ=$(expr $(cat "${SEQ_FILE}") + 1) || exit 1
-echo "${SEQ}" > "${SEQ_FILE}"
+for file in "${FILES[@]}"; do
+    for i in 1 2 4 8 16 32 64 128 256 512 1024; do
 
-source funcs.sh $1
+        sed -i "s#^terminals=.*#terminals=${i}#g" "$file"
 
-setCP || exit 1
+        set -- "$file"
 
-myOPTS="-Dprop=$1 -DrunID=${SEQ}"
+        if [ $# -ne 1 ] ; then
+            echo "usage: $(basename $0) PROPS_FILE" >&2
+            exit 2
+        fi
 
-java -cp "$myCP" $myOPTS client.jTPCC
+        SEQ_FILE="./.jTPCC_run_seq.dat"
+        if [ ! -f "${SEQ_FILE}" ] ; then
+            echo "0" > "${SEQ_FILE}"
+        fi
+        SEQ=$(expr $(cat "${SEQ_FILE}") + 1) || exit 1
+        echo "${SEQ}" > "${SEQ_FILE}"
+
+        source funcs.sh $1
+
+        setCP || exit 1
+
+        myOPTS="-Dprop=$1 -DrunID=${SEQ}"
+
+        java -cp "$myCP" $myOPTS client.jTPCC
+    done
+
+done

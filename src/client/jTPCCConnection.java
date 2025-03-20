@@ -40,7 +40,8 @@ public class jTPCCConnection
     public PreparedStatement    stmtPaymentUpdateCustomer;
     public PreparedStatement    stmtPaymentUpdateCustomerWithData;
     public PreparedStatement    stmtPaymentInsertHistory;
-	public PreparedStatement    stmtPaymentSelectNewOrder;
+	public PreparedStatement    stmtPaymentSelectNewOrder_mysql;
+	public PreparedStatement    stmtPaymentSelectNewOrder_pg;
 	public PreparedStatement    stmtPaymentUpdateNewOrder;
 	public PreparedStatement	stmtPaymentSelectOorderData;
 	public PreparedStatement    stmtPaymentSelectOrderLineAmount;
@@ -150,12 +151,20 @@ public class jTPCCConnection
 		"    WHERE c_w_id = ? AND c_d_id = ? AND c_id = ?");
 
 	// PreparedStatements for PAYMENT
-	stmtPaymentSelectNewOrder = dbConn.prepareStatement(
+	stmtPaymentSelectNewOrder_mysql = dbConn.prepareStatement(
 		"SELECT no_o_id, no_w_id, no_d_id\n"+
 		"   FROM bmsql_new_order \n"+
 		"   WHERE no_p_flag = 0 \n"+
 		" 	ORDER BY RAND()\n" +
 		"	LIMIT 1");	
+
+	stmtPaymentSelectNewOrder_pg = dbConn.prepareStatement(
+		"SELECT no_o_id, no_w_id, no_d_id\n"+
+		"   FROM bmsql_new_order \n"+
+		"   WHERE no_p_flag = 0 \n"+
+		" 	ORDER BY RANDOM()\n" +
+		"	LIMIT 1");	
+	
 	stmtPaymentUpdateNewOrder = dbConn.prepareStatement(
 		"UPDATE bmsql_new_order\n"+
 		"    SET no_p_flag = 1\n"+

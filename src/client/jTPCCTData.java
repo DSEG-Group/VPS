@@ -254,9 +254,14 @@ public class jTPCCTData {
 	}
 
 	public String SQLLine(long sessionStart){
-		SQLString = "BEGIN;\n" + SQLString;
-		SQLString += "COMMIT;\n";
+		SQLString = "\"1\":\n{\"sql\":\"BEGIN;\n" + SQLString;
+		SQLString += "COMMIT\";\n";
+		SQLString += "\"value\":"+"\""+transVal_real+"\"}";
 		return SQLString;
+	}
+
+	public long get_latency(){
+		return transEnd-transStart;
 	}
 
 	/*
@@ -1028,7 +1033,12 @@ public class jTPCCTData {
 		// 	}
 
 			//Select the unpay order
-			stmt = db.stmtPaymentSelectNewOrder;
+			if(dbType == DB_MYSQL){
+				stmt = db.stmtPaymentSelectNewOrder_mysql;
+			}
+			else{
+				stmt = db.stmtPaymentSelectNewOrder_pg;
+			}
 			
 			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
 

@@ -50,6 +50,23 @@ public class jTPCC implements jTPCCConfig {
 	private OSCollector osCollector = null;
 	private HashMap<String, Long> costPerWorkerload;
 
+	private int numTerminals = -1;
+	private Vector<Long>latency_queue = new Vector<>();
+
+	private boolean limitIsTime;
+				
+	private int transactionsPerTerminal = -1;
+	private int numWarehouses = -1;
+	private int loadWarehouses = -1;
+	private int newOrderWeightValue = -1, paymentWeightValue = -1, orderStatusWeightValue = -1,
+			deliveryWeightValue = -1, stockLevelWeightValue = -1;
+	private long executionTimeMillis = -1;
+
+	static {
+        // 每次运行时生成唯一时间戳
+        System.setProperty("currentTimestamp", String.valueOf(System.currentTimeMillis()));
+    }
+
 	public static void main(String args[]) {
 		PropertyConfigurator.configure("log4j.properties");
 		new jTPCC();
@@ -236,11 +253,9 @@ public class jTPCC implements jTPCCConfig {
 					resultCSVName);
 
 			// Open the per transaction result.sql file
-			String resultSQLName = new File(resultDataDir, "result.sql").getPath();
+			String resultSQLName = new File(resultDataDir, "result.json").getPath();
 			try {
 				resultSQL = new BufferedWriter(new FileWriter(resultSQLName));
-				resultSQL.write("run,transGenerateTime,transStart,elapsed,latency,dblatency," +
-						"ttype,rbk,dskipped,Value_real,abort,Prioity,error\n");
 			} catch (IOException e) {
 				log.error(e.getMessage());
 				System.exit(1);
@@ -260,14 +275,7 @@ public class jTPCC implements jTPCCConfig {
 
 		if (databaseDriverLoaded) {
 			try {
-				boolean limitIsTime = iRunMinsBool;
-				int numTerminals = -1;
-				int transactionsPerTerminal = -1;
-				int numWarehouses = -1;
-				int loadWarehouses = -1;
-				int newOrderWeightValue = -1, paymentWeightValue = -1, orderStatusWeightValue = -1,
-						deliveryWeightValue = -1, stockLevelWeightValue = -1;
-				long executionTimeMillis = -1;
+
 				boolean terminalWarehouseFixed = true;
 				long CLoad;
 
@@ -500,12 +508,13 @@ public class jTPCC implements jTPCCConfig {
 						}
 					}
 
+
+					//启动多线程
 					synchronized (terminals) {
 						printMessage("Starting all terminals...");
 						transactionCount = 1;
 						for (int i = 0; i < terminals.length; i++)
 							(new Thread(terminals[i])).start();
-
 					}
 
 					printMessage("All terminals started executing " + sessionStart);
@@ -535,15 +544,15 @@ public class jTPCC implements jTPCCConfig {
 				signalTerminalsRequestEndSent = true;
 
 				for (int i = 0; i < terminals.length; i++)
-					if (terminals[i] != null)
+					if (terminals[i] != null){
 						terminals[i].stopRunningWhenPossible();
-
+					}
 				printMessage("Waiting for all active transactions to end...");
 			}
 		}
 	}
 
-	public void signalTerminalEnded(jTPCCTerminal terminal, long countNewOrdersExecuted) {
+	public void signalTerminalEnded(jTPCCTerminal terminal, long countNewOrdersExecuted,Vector<Long>t_latency_queue) {
 		synchronized (terminals) {
 			boolean found = false;
 			terminalsStarted--;
@@ -555,6 +564,7 @@ public class jTPCC implements jTPCCConfig {
 					found = true;
 				}
 			}
+			this.latency_queue.addAll(t_latency_queue);
 		}
 
 		if (terminalsStarted == 0) {
@@ -643,6 +653,15 @@ public class jTPCC implements jTPCCConfig {
 		double vpsTotal = vpmTotal/60;
 		double tpsTotal = tpmTotal/60;
 		System.out.println("");
+
+
+		Collections.sort(latency_queue);
+		int queue_lenth = latency_queue.size();
+		long p50 = latency_queue.get((int)(queue_lenth*0.5));
+		long p99 = latency_queue.get((int)(queue_lenth*0.99));
+		long p999 = latency_queue.get((int)(queue_lenth*0.999));
+		
+
 		log.info("Term-00, ");
 		log.info("Term-00, ");
 		log.info("Term-00, Measured tpmC (NewOrders) = " + tpmC);
@@ -654,6 +673,9 @@ public class jTPCC implements jTPCCConfig {
 		log.info("Term-00, Session End       = " + sessionEnd);
 		log.info("Term-00, Value Count = " + transValCount);// change 11.13
 		log.info("Term-00, Transaction Count = " + (transactionCount - 1));
+		log.info("Term-00, latency p50 = " + p50);
+		log.info("Term-00, latency p99 = " + p99);
+		log.info("Term-00, latency p999 = " + p999);
 		for (String key : costPerWorkerload.keySet()) {
 			Long value = costPerWorkerload.get(key);
 			log.info("executeTime[" + key + "]=" + value.toString());

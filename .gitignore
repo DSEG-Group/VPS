@@ -28,7 +28,8 @@ bin/
 ### Mac OS ###
 .DS_Store
 
-run/my_result*
+run/*result*
+run/logs
 doc/
 build.xml
 README

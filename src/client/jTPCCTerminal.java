@@ -40,6 +40,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
     private StringBuffer query = null;
     private int result = 0;
     private boolean stopRunningSignal = false;
+	private Vector<Long> latency_queue = new Vector<>();
 
     long terminalStartTime = 0;
     long transactionEnd = 0;
@@ -106,7 +107,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 	printMessage("");
 	printMessage("Terminal \'" + terminalName + "\' finished after " + (transactionCount-1) + " transaction(s).");
 
-	parent.signalTerminalEnded(this, newOrderCounter);
+	parent.signalTerminalEnded(this, newOrderCounter,latency_queue);
     }
 
     public void stopRunningWhenPossible()
@@ -162,6 +163,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.execute(log, db, rnd);
 			transVal = term.getTransVal_real();
 			is_abort = term.get_abort();
+			latency_queue.add(term.get_latency());
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 			
@@ -191,6 +193,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.execute(log, db, rnd);
 			transVal = term.getTransVal_real();
 			is_abort = term.get_abort();
+			latency_queue.add(term.get_latency());
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 		}
@@ -219,6 +222,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.execute(log, db, rnd);
 			transVal = term.getTransVal_real();
 			is_abort = term.get_abort();
+			latency_queue.add(term.get_latency());
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 		}
@@ -247,6 +251,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.execute(log, db, rnd);
 			transVal = term.getTransVal_real();
 			is_abort = term.get_abort();
+			latency_queue.add(term.get_latency());
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 
@@ -288,6 +293,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    term.execute(log, db, rnd);
 			transVal = term.getTransVal_real();
 			is_abort = term.get_abort();
+			latency_queue.add(term.get_latency());
 		    parent.resultAppend(term);
 		    term.traceScreen(log);
 		}
@@ -368,6 +374,11 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 	    log.error(se.getMessage());
 	}
     }
+
+	public Vector<Long> get_latencyQueue(){
+		return latency_queue;
+	}
+
 
 
     void transCommit() {
