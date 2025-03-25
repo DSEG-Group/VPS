@@ -1,0 +1,4 @@
+run,elapsed,device,rxpktsps,rxkbps,txpktsps,txkbps
+494,1000,net_eno1,5.0,1.6943359375,0.0,0.0
+494,2000,net_eno1,2.0,0.677734375,0.0,0.0
+494,3000,net_eno1,3.0,1.0166015625,0.0,0.0

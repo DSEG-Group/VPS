@@ -17,7 +17,8 @@ public class jTPCCTData {
 	protected int numWarehouses = 0;
 	
 	private 	  int with_prio = 0;
-	private 	  int timecounter = 1;
+	private 	  int timecounter = 0;
+	private		  boolean value_loss = false;
 
 	public final static int DB_UNKNOWN = 0,
 			DB_FIREBIRD = 1,
@@ -816,7 +817,23 @@ public class jTPCCTData {
 
 			stmt.executeUpdate();
 
+			//直接损失价值
+			if(value_loss){
+				timeCounterNow = System.currentTimeMillis();
+					timeDelta = timeCounterNow - transStart;
+					if (timeDelta > 200) {
+						double valloss = transVal_real*(timeDelta - 200) / (0.1 * 200) * 0.008;
+						if(valloss<transVal_real){
+							transVal_real = transVal_real-transVal_real*(timeDelta - 200) / (0.1 * 200) * 0.008;
+						}
+						else{
+							transVal_real = 0;
+						}
+					}
+			}
 			db.commit();
+
+
 
 		} catch (SQLException se) {
 			log.error("Unexpected SQLException in NEW_ORDER");
@@ -1087,6 +1104,15 @@ public class jTPCCTData {
 			payment.d_id = rs.getInt("no_d_id");
 			rs.close();
 
+			stmt = db.stmtPaymentUpdateNewOrder;
+			stmt.setInt(1, payment.o_id);
+			stmt.setInt(2, payment.w_id);
+			stmt.setInt(3, payment.d_id);
+
+			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
+			stmt.executeUpdate();
+
 			stmt = db.stmtPaymentSelectOorderData;
 			stmt.setInt(1, payment.o_id);
 			stmt.setInt(2, payment.w_id);
@@ -1123,14 +1149,8 @@ public class jTPCCTData {
 			payment.c_id = rs.getInt("o_c_id");
 			rs.close();
 
-			stmt = db.stmtPaymentUpdateNewOrder;
-			stmt.setInt(1, payment.o_id);
-			stmt.setInt(2, payment.w_id);
-			stmt.setInt(3, payment.d_id);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
 
-			stmt.executeUpdate();
 
 			if(timecounter == 1){
 				timeCounterNow = System.currentTimeMillis();
@@ -1555,6 +1575,20 @@ public class jTPCCTData {
 
 			payment.h_date = new Timestamp(h_date).toString();
 
+			if(value_loss){
+				timeCounterNow = System.currentTimeMillis();
+					timeDelta = timeCounterNow - transStart;
+					if (timeDelta > 200) {
+						double valloss = transVal_real*(timeDelta - 200) / (0.1 * 200) * 0.017;
+						if(valloss<transVal_real){
+							transVal_real = transVal_real-transVal_real*(timeDelta - 200) / (0.1 * 200) * 0.0;
+						}
+						else{
+							transVal_real = 0;
+						}
+					}
+			}
+			
 			db.commit();
 		} catch (SQLException se) {
 			log.error("Unexpected SQLException in PAYMENT");
@@ -1949,7 +1983,7 @@ public class jTPCCTData {
 		transRbk = false;
 		transError = null;
 		transGeneratime = System.currentTimeMillis();
-		transVal_real = 675 * 5;
+		transVal_real = 2100;
 
 		newOrder = null;
 		payment = null;

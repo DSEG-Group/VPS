@@ -41,7 +41,7 @@ public class jTPCCRandom {
         if (initialized)
             throw new IllegalStateException("Global instance exists");
 
-        this.random = new Random(42);// 设置固定种子
+        this.random = new Random(1002);// 设置固定种子
         jTPCCRandom.nURandCLast = nextLong(0, 255);
         jTPCCRandom.nURandCC_ID = nextLong(0, 1023);
         jTPCCRandom.nURandCI_ID = nextLong(0, 8191);
@@ -67,7 +67,7 @@ public class jTPCCRandom {
         if (initialized)
             throw new IllegalStateException("Global instance exists");
 
-        this.random = new Random(42);// 设置固定种子
+        this.random = new Random(1002);// 设置固定种子
         jTPCCRandom.nURandCC_ID = nextLong(0, 1023);
         jTPCCRandom.nURandCI_ID = nextLong(0, 8191);
 
@@ -87,7 +87,7 @@ public class jTPCCRandom {
 
     private jTPCCRandom(jTPCCRandom parent) {
         // this.random = new Random(System.currentTimeMillis());// 设置固定种子
-        this.random = new Random(42);
+        this.random = new Random(1002);
     }
 
     /*

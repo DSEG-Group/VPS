@@ -442,8 +442,8 @@ public class jTPCC implements jTPCCConfig {
 						int terminalWarehouseID;
 						int terminalDistrictID;
 						// do {
-							terminalWarehouseID = rnd.nextInt(1, numWarehouses);
-							terminalDistrictID = rnd.nextInt(1, 10);
+						terminalWarehouseID = rnd.nextInt(1, numWarehouses);
+						terminalDistrictID = rnd.nextInt(1, 10);
 						// } while (usedTerminals[terminalWarehouseID - 1][terminalDistrictID - 1] == 1);
 						// usedTerminals[terminalWarehouseID - 1][terminalDistrictID - 1] = 1;
 
