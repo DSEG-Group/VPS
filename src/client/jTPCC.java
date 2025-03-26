@@ -636,7 +636,7 @@ public class jTPCC implements jTPCCConfig {
 			try {
 				resultCSV.write(runID + "," +
 						term.resultLine(sessionStartTimestamp));
-				resultSQL.write(term.SQLLine(sessionStartTimestamp));
+				resultSQL.write(term.SQLLine(sessionStartTimestamp,transactionCount));
 			} catch (IOException e) {
 				log.error("Term-00, " + e.getMessage());
 			}

@@ -4,13 +4,13 @@ export JAVA_HOME=/home/dseg/Desktop/lyb/tpcc/JDK8
 export PATH=$PATH:$JAVA_HOME/bin
 
 FILES=(
-    "my_mysql.properties"
-    "my_cockroachdb.properties"
+    # "my_mysql.properties"
+    # "my_cockroachdb.properties"
     "my_postgres.properties"
 )
 
 for file in "${FILES[@]}"; do
-    for i in 512; do
+    for i in 1; do
 
         sed -i "s#^terminals=.*#terminals=${i}#g" "$file"
 

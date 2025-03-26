@@ -254,10 +254,10 @@ public class jTPCCTData {
 		return line;
 	}
 
-	public String SQLLine(long sessionStart){
-		SQLString = "\"1\":\n{\"sql\":\"BEGIN;\n" + SQLString;
-		SQLString += "COMMIT\";\n";
-		SQLString += "\"value\":"+"\""+transVal_real+"\"}";
+	public String SQLLine(long sessionStart,long i){
+		SQLString = i + ":\n{\"sql\":\"BEGIN;\n" + SQLString;
+		SQLString += "COMMIT;\",\n";
+		SQLString += "\"value\":"+"\""+transVal_real+"\"},\n";
 		return SQLString;
 	}
 
@@ -427,8 +427,12 @@ public class jTPCCTData {
 			stmt = db.stmtNewOrderSelectDist;
 			stmt.setInt(1, newOrder.w_id);
 			stmt.setInt(2, newOrder.d_id);
-
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			rs = stmt.executeQuery();
 
@@ -467,7 +471,12 @@ public class jTPCCTData {
 			stmt.setInt(2, newOrder.d_id);
 			stmt.setInt(3, newOrder.c_id);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			rs = stmt.executeQuery();
 
@@ -507,7 +516,14 @@ public class jTPCCTData {
 			stmt = db.stmtNewOrderUpdateDist;
 			stmt.setInt(1, newOrder.w_id);
 			stmt.setInt(2, newOrder.d_id);
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
+
 			stmt.executeUpdate();
 
 			if(timecounter == 1){
@@ -537,7 +553,12 @@ public class jTPCCTData {
 			stmt.setInt(6, ol_cnt);
 			stmt.setInt(7, o_all_local);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			stmt.executeUpdate();
 
@@ -564,7 +585,12 @@ public class jTPCCTData {
 			stmt.setInt(2, newOrder.d_id);
 			stmt.setInt(3, newOrder.w_id);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			stmt.executeUpdate();
 
@@ -606,7 +632,12 @@ public class jTPCCTData {
 				stmt.setInt(i_idx, x.intValue());
 			}
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			rs = stmt.executeQuery();
 
@@ -672,7 +703,12 @@ public class jTPCCTData {
 				stmt.setInt(i * 2 + 2, newOrder.ol_i_id[seq]);
 			}
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			rs = stmt.executeQuery();
 
@@ -747,7 +783,12 @@ public class jTPCCTData {
 				stmt.setInt(4, newOrder.ol_supply_w_id[seq]);
 				stmt.setInt(5, newOrder.ol_i_id[seq]);
 
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				if(dbType == DB_MYSQL){
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				}
+				else{
+					SQLString += stmt.toString()+";\n";
+				}
 
 				stmt.executeUpdate();
 
@@ -813,7 +854,12 @@ public class jTPCCTData {
 			stmt.setInt(3,newOrder.d_id);
 			stmt.setInt(4,newOrder.c_id);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			stmt.executeUpdate();
 
@@ -1057,7 +1103,12 @@ public class jTPCCTData {
 				stmt = db.stmtPaymentSelectNewOrder_pg;
 			}
 			
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			rs = stmt.executeQuery();
 
@@ -1109,7 +1160,12 @@ public class jTPCCTData {
 			stmt.setInt(2, payment.w_id);
 			stmt.setInt(3, payment.d_id);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			stmt.executeUpdate();
 
@@ -1118,7 +1174,12 @@ public class jTPCCTData {
 			stmt.setInt(2, payment.w_id);
 			stmt.setInt(3, payment.d_id);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			rs = stmt.executeQuery();
 
@@ -1174,7 +1235,12 @@ public class jTPCCTData {
 			stmt.setInt(2, payment.w_id);
 			stmt.setInt(3, payment.d_id);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			rs = stmt.executeQuery();
 
@@ -1208,7 +1274,12 @@ public class jTPCCTData {
 			stmt.setInt(2, payment.w_id);
 			stmt.setInt(3, payment.d_id);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			stmt.executeUpdate();
 
@@ -1234,7 +1305,12 @@ public class jTPCCTData {
 			stmt.setInt(1, payment.w_id);
 			stmt.setInt(2, payment.d_id);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			rs = stmt.executeQuery();
 
@@ -1274,7 +1350,12 @@ public class jTPCCTData {
 			stmt.setDouble(1, payment.h_amount);
 			stmt.setInt(2, payment.w_id);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			stmt.executeUpdate();
 
@@ -1299,7 +1380,12 @@ public class jTPCCTData {
 			stmt = db.stmtPaymentSelectWarehouse;
 			stmt.setInt(1, payment.w_id);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			rs = stmt.executeQuery();
 
@@ -1382,7 +1468,12 @@ public class jTPCCTData {
 			stmt.setInt(2, payment.c_d_id);
 			stmt.setInt(3, payment.c_id);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			rs = stmt.executeQuery();
 
@@ -1440,7 +1531,12 @@ public class jTPCCTData {
 				stmt.setInt(4, payment.c_d_id);
 				stmt.setInt(5, payment.c_id);
 
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				if(dbType == DB_MYSQL){
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				}
+				else{
+					SQLString += stmt.toString()+";\n";
+				}
 
 				stmt.executeUpdate();
 
@@ -1468,7 +1564,12 @@ public class jTPCCTData {
 				stmt.setInt(2, payment.c_d_id);
 				stmt.setInt(3, payment.c_id);
 
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				if(dbType == DB_MYSQL){
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				}
+				else{
+					SQLString += stmt.toString()+";\n";
+				}
 
 				rs = stmt.executeQuery();
 
@@ -1519,7 +1620,12 @@ public class jTPCCTData {
 				stmt.setInt(5, payment.c_d_id);
 				stmt.setInt(6, payment.c_id);
 
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				if(dbType == DB_MYSQL){
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				}
+				else{
+					SQLString += stmt.toString()+";\n";
+				}
 
 				stmt.executeUpdate();
 
@@ -1552,7 +1658,12 @@ public class jTPCCTData {
 			stmt.setDouble(7, payment.h_amount);
 			stmt.setString(8, payment.w_name + "    " + payment.d_name);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			stmt.executeUpdate();
 
@@ -1785,7 +1896,12 @@ public class jTPCCTData {
 				stmt.setInt(2, orderStatus.d_id);
 				stmt.setString(3, orderStatus.c_last);
 
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				if(dbType == DB_MYSQL){
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				}
+				else{
+					SQLString += stmt.toString()+";\n";
+				}
 
 				rs = stmt.executeQuery();
 				while (rs.next())
@@ -1808,7 +1924,12 @@ public class jTPCCTData {
 			stmt.setInt(2, orderStatus.d_id);
 			stmt.setInt(3, orderStatus.c_id);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			rs = stmt.executeQuery();
 			if (!rs.next()) {
@@ -1830,7 +1951,12 @@ public class jTPCCTData {
 			stmt.setInt(2, orderStatus.d_id);
 			stmt.setInt(3, orderStatus.c_id);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			rs = stmt.executeQuery();
 			if (!rs.next()) {
@@ -1851,7 +1977,12 @@ public class jTPCCTData {
 			stmt.setInt(2, orderStatus.d_id);
 			stmt.setInt(3, orderStatus.o_id);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			rs = stmt.executeQuery();
 			while (rs.next()) {
@@ -2007,7 +2138,12 @@ public class jTPCCTData {
 				if(dbType == DB_COCKROACH){
 					stmt = db.stmtSetPriorityLow;
 
-					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					if(dbType == DB_MYSQL){
+						SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					}
+					else{
+						SQLString += stmt.toString()+";\n";
+					}
 
 					stmt.execute();
 				}
@@ -2018,7 +2154,12 @@ public class jTPCCTData {
 			stmt.setInt(3, stockLevel.w_id);
 			stmt.setInt(4, stockLevel.d_id);
 
-			SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt.toString()+";\n";
+			}
 
 			rs = stmt.executeQuery();
 			if (!rs.next()) {

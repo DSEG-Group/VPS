@@ -147,9 +147,10 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 	     * significant traffic, changing the overall database
 	     * access pattern significantly.
 	     */
-	    if(!terminalWarehouseFixed)
+	    // if(!terminalWarehouseFixed)
 		terminalWarehouseID = rnd.nextInt(1, numWarehouses);
-
+		terminalDistrictID = rnd.nextInt(1, 10);
+		
 	    if(transactionType <= paymentWeight)
 	    {
 		jTPCCTData      term = new jTPCCTData();
