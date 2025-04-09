@@ -65,6 +65,8 @@ public class jTPCCConnection
 	public PreparedStatement	stmtSetPriorityLow;
 	public PreparedStatement	stmtSetPriorityNormal;
 
+	public PreparedStatement 	stmtStandardQuery;
+
     public jTPCCConnection(Connection dbConn, int dbType)
 	throws SQLException
     {
@@ -367,5 +369,9 @@ public class jTPCCConnection
 
 	public int getdbtype(){
 		return this.dbType;
+	}
+
+	public void setStandardQuery(String Query)throws SQLException{
+		stmtStandardQuery = dbConn.prepareStatement(Query);
 	}
 }

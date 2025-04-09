@@ -28,6 +28,7 @@ public class LoadDataWorker implements Runnable {
 	private int extreme_high_value_rate = 1;
 	private int low_value_rate = 40;
 	private int normal_value_rate = 40;
+	// private String SQLString = "";
 
 	private PreparedStatement stmtConfig = null;
 	private PreparedStatement stmtItem = null;
@@ -60,11 +61,23 @@ public class LoadDataWorker implements Runnable {
 	private Formatter fmtOrderLine = null;
 	private StringBuffer sbNewOrder = null;
 	private Formatter fmtNewOrder = null;
+	private int dbType;
 
-	LoadDataWorker(int worker, String csvNull, jTPCCRandom rnd) {
+	// private LoadData parent;
+
+	public final static int DB_UNKNOWN = 0,
+							DB_FIREBIRD = 1,
+							DB_ORACLE = 2,
+							DB_POSTGRES = 3,
+							DB_MYSQL = 4,
+							DB_COCKROACH = 5;
+
+
+	LoadDataWorker(int worker, String csvNull, jTPCCRandom rnd, int dbType) {
 		this.worker = worker;
 		this.csvNull = csvNull;
 		this.rnd = rnd;
+		this.dbType = dbType;
 		// this.extreme_high_value_rate = extreme_high_value_rate;
 		// this.high_value_rate = high_value_rate;
 		// this.normal_value_rate = normal_value_rate;
@@ -96,68 +109,69 @@ public class LoadDataWorker implements Runnable {
 		this.fmtNewOrder = new Formatter(sbNewOrder);
 	}
 
-	LoadDataWorker(int worker, Connection dbConn, jTPCCRandom rnd)
+	LoadDataWorker(int worker, Connection dbConn, jTPCCRandom rnd,int dbtype)
 			throws SQLException {
 		this.worker = worker;
 		this.dbConn = dbConn;
 		this.rnd = rnd;
+		this.dbType = dbtype;
 
 		this.sb = new StringBuffer();
 		this.fmt = new Formatter(sb);
 
 		stmtConfig = dbConn.prepareStatement(
-				"INSERT INTO bmsql_config (" +
-						"  cfg_name, cfg_value) " +
-						"VALUES (?, ?)");
+				"INSERT INTO bmsql_config (\n" +
+						"  cfg_name, cfg_value) \n" +
+						"VALUES (?, ?);\n");
 		stmtItem = dbConn.prepareStatement(
-				"INSERT INTO bmsql_item (" +
-						"  i_id, i_name, i_price, i_data, i_im_id) " +
-						"VALUES (?, ?, ?, ?, ?)");
+				"INSERT INTO bmsql_item (\n" +
+						"  i_id, i_name, i_price, i_data, i_im_id) \n" +
+						"VALUES (?, ?, ?, ?, ?);\n");
 		stmtWarehouse = dbConn.prepareStatement(
-				"INSERT INTO bmsql_warehouse (" +
-						"  w_id, w_ytd, w_tax, w_name, w_street_1, w_street_2, w_city, " +
-						"  w_state, w_zip) " +
-						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+				"INSERT INTO bmsql_warehouse (\n" +
+						"  w_id, w_ytd, w_tax, w_name, w_street_1, w_street_2, w_city, \n" +
+						"  w_state, w_zip) \n" +
+						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);\n");
 		stmtStock = dbConn.prepareStatement(
-				"INSERT INTO bmsql_stock (" +
+				"INSERT INTO bmsql_stock (\n" +
 						"  s_w_id, s_i_id, s_quantity, s_ytd, s_order_cnt, s_remote_cnt, s_data, s_dist_01, s_dist_02, "
 						+
-						"  s_dist_03, s_dist_04, s_dist_05, s_dist_06, " +
-						"  s_dist_07, s_dist_08, s_dist_09, s_dist_10) " +
-						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+						"  s_dist_03, s_dist_04, s_dist_05, s_dist_06, \n" +
+						"  s_dist_07, s_dist_08, s_dist_09, s_dist_10) \n" +
+						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);\n");
 		stmtDistrict = dbConn.prepareStatement(
-				"INSERT INTO bmsql_district (" +
-						"  d_w_id, d_id, d_ytd, d_tax, d_next_o_id, d_name, d_street_1, d_street_2, " +
-						"  d_city, d_state, d_zip) " +
-						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+				"INSERT INTO bmsql_district (\n" +
+						"  d_w_id, d_id, d_ytd, d_tax, d_next_o_id, d_name, d_street_1, d_street_2, \n" +
+						"  d_city, d_state, d_zip) \n" +
+						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);\n");
 		stmtCustomer = dbConn.prepareStatement(
-				"INSERT INTO bmsql_customer (" +
-						"  c_w_id, c_d_id, c_id, c_discount, c_credit, c_last, c_first, c_credit_lim, " +
-						"  c_balance, c_ytd_payment, c_payment_cnt, c_delivery_cnt, " +
-						"  c_street_1, c_street_2, c_city, c_state, c_zip, " +
-						"  c_phone, c_since, c_middle, c_data) " +
-						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, " +
-						"        ?, ?, ?, ?, ?, ?)");
+				"INSERT INTO bmsql_customer (\n" +
+						"  c_w_id, c_d_id, c_id, c_discount, c_credit, c_last, c_first, c_credit_lim, \n" +
+						"  c_balance, c_ytd_payment, c_payment_cnt, c_delivery_cnt, \n" +
+						"  c_street_1, c_street_2, c_city, c_state, c_zip, \n" +
+						"  c_phone, c_since, c_middle, c_data) \n" +
+						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \n" +
+						"        ?, ?, ?, ?, ?, ?);\n");
 		stmtHistory = dbConn.prepareStatement(
-				"INSERT INTO bmsql_history (" +
-						"  hist_id, h_c_id, h_c_d_id, h_c_w_id, h_d_id, h_w_id, " +
-						"  h_date, h_amount, h_data) " +
-						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+				"INSERT INTO bmsql_history (\n" +
+						"  hist_id, h_c_id, h_c_d_id, h_c_w_id, h_d_id, h_w_id, \n" +
+						"  h_date, h_amount, h_data) \n" +
+						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);\n");
 		stmtOrder = dbConn.prepareStatement(
-				"INSERT INTO bmsql_oorder (" +
-						"  o_w_id, o_d_id, o_id, o_c_id, " +
-						"  o_carrier_id, o_ol_cnt, o_all_local, o_entry_d) " +
-						"VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+				"INSERT INTO bmsql_oorder (\n" +
+						"  o_w_id, o_d_id, o_id, o_c_id, \n" +
+						"  o_carrier_id, o_ol_cnt, o_all_local, o_entry_d) \n" +
+						"VALUES (?, ?, ?, ?, ?, ?, ?, ?);\n");
 		stmtOrderLine = dbConn.prepareStatement(
-				"INSERT INTO bmsql_order_line (" +
-						"  ol_w_id, ol_d_id, ol_o_id, ol_number, ol_i_id, " +
-						"  ol_delivery_d, ol_amount, ol_supply_w_id, ol_quantity, " +
-						"  ol_dist_info) " +
-						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+				"INSERT INTO bmsql_order_line (\n" +
+						"  ol_w_id, ol_d_id, ol_o_id, ol_number, ol_i_id, \n" +
+						"  ol_delivery_d, ol_amount, ol_supply_w_id, ol_quantity, \n" +
+						"  ol_dist_info) \n" +
+						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);\n");
 		stmtNewOrder = dbConn.prepareStatement(
-				"INSERT INTO bmsql_new_order (" +
-						"  no_w_id, no_d_id, no_o_id, no_p_flag) " +
-						"VALUES (?, ?, ?, ?)");
+				"INSERT INTO bmsql_new_order (\n" +
+						"  no_w_id, no_d_id, no_o_id, no_p_flag) \n" +
+						"VALUES (?, ?, ?, ?);\n");
 	}
 
 	/*
@@ -174,8 +188,10 @@ public class LoadDataWorker implements Runnable {
 					sb.setLength(0);
 
 					loadItem();
+					
 
 					fmt.format("Worker %03d: Loading ITEM done", worker);
+					
 					System.out.println(sb.toString());
 					sb.setLength(0);
 				} else {
@@ -313,7 +329,10 @@ public class LoadDataWorker implements Runnable {
 
 				stmtItem.setString(4, iData);
 				stmtItem.setInt(5, rnd.nextInt(1, 10000));
-
+				
+				// SQLString += stmtItem.toString()+";\n";
+				// LoadData.SQLAppend(SQLString);
+				// SQLString = "";
 				stmtItem.addBatch();
 			}
 		}
@@ -365,6 +384,15 @@ public class LoadDataWorker implements Runnable {
 			stmtWarehouse.setString(7, rnd.getAString(10, 20));
 			stmtWarehouse.setString(8, rnd.getState());
 			stmtWarehouse.setString(9, rnd.getNString(4, 4) + "11111");
+			
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmtWarehouse.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmtWarehouse.toString()+";\n";
+			// }
+			// LoadData.SQLAppend(SQLString);
+			// SQLString = "";
 
 			stmtWarehouse.execute();
 		}
@@ -438,6 +466,11 @@ public class LoadDataWorker implements Runnable {
 				stmtStock.setString(16, rnd.getAString(24, 24));
 				stmtStock.setString(17, rnd.getAString(24, 24));
 
+				// SQLString += stmtStock.toString()+";\n";
+
+				// LoadData.SQLAppend(SQLString);
+				// SQLString = "";
+
 				stmtStock.addBatch();
 			}
 
@@ -481,6 +514,16 @@ public class LoadDataWorker implements Runnable {
 				stmtDistrict.setString(9, rnd.getAString(10, 20));
 				stmtDistrict.setString(10, rnd.getState());
 				stmtDistrict.setString(11, rnd.getNString(4, 4) + "11111");
+
+				// if(dbType == DB_MYSQL){
+				// 	SQLString += stmtDistrict.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				// }
+				// else{
+				// 	SQLString += stmtDistrict.toString()+";\n";
+				// }
+
+				// LoadData.SQLAppend(SQLString);
+				// SQLString = "";
 
 				stmtDistrict.execute();
 			}
@@ -559,6 +602,11 @@ public class LoadDataWorker implements Runnable {
 					stmtCustomer.setString(20, "OE");
 					stmtCustomer.setString(21, rnd.getAString(300, 500));
 
+					// SQLString += stmtCustomer.toString()+";\n";
+		
+					// LoadData.SQLAppend(SQLString);
+					// SQLString = "";
+					
 					stmtCustomer.addBatch();
 				}
 
@@ -586,6 +634,11 @@ public class LoadDataWorker implements Runnable {
 					stmtHistory.setTimestamp(7, new Timestamp(System.currentTimeMillis()));
 					stmtHistory.setDouble(8, 10.00);
 					stmtHistory.setString(9, rnd.getAString(12, 24));
+
+					// SQLString += stmtHistory.toString()+";\n";
+					
+					// LoadData.SQLAppend(SQLString);
+					// SQLString = "";
 
 					stmtHistory.addBatch();
 				}
@@ -667,6 +720,11 @@ public class LoadDataWorker implements Runnable {
 					stmtOrder.setInt(7, 1);
 					stmtOrder.setTimestamp(8, new Timestamp(System.currentTimeMillis()));
 
+					// SQLString += stmtOrder.toString()+";\n";
+
+					// LoadData.SQLAppend(SQLString);
+					// SQLString = "";
+
 					stmtOrder.addBatch();
 				}
 
@@ -706,6 +764,11 @@ public class LoadDataWorker implements Runnable {
 						stmtOrderLine.setInt(9, 5);
 						stmtOrderLine.setString(10, rnd.getAString(24, 24));
 
+						// SQLString += stmtOrderLine.toString()+";\n";
+
+						// LoadData.SQLAppend(SQLString);
+						// SQLString = "";
+
 						stmtOrderLine.addBatch();
 					}
 				}
@@ -726,6 +789,11 @@ public class LoadDataWorker implements Runnable {
 						stmtNewOrder.setInt(3, o_id);
 						stmtNewOrder.setInt(4, 1);
 
+						// SQLString += stmtNewOrder.toString()+";\n";
+
+						// LoadData.SQLAppend(SQLString);
+
+						// SQLString = "";
 						stmtNewOrder.addBatch();
 					}
 				}
@@ -765,4 +833,8 @@ public class LoadDataWorker implements Runnable {
 		if (!writeCSV)
 			dbConn.commit();
 	} // End loadWarehouse()
+
+	// public String getSQLString(){
+	// 	return SQLString;
+	// }
 }

@@ -22,6 +22,8 @@ done
 
 ./runLoader.sh "${PROPS}" $*
 
+# ./runSQL.sh "${PROPS}" ./standard_data/LoadData.sql
+
 for step in ${AFTER_LOAD} ; do
     ./runSQL.sh "${PROPS}" $step
 done

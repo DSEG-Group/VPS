@@ -5,3 +5,6 @@
 -- ----
 
 vacuum analyze;
+
+
+Create Database bmsql with template postgres owner dseg;

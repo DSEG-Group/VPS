@@ -9,7 +9,7 @@ package client;/*
 
 import OSCollector.OSCollector;
 import org.apache.log4j.*;
-
+import org.firebirdsql.jdbc.parser.JaybirdSqlParser.substringFunction_return;
 
 import java.io.*;
 import java.nio.file.*;
@@ -17,6 +17,9 @@ import java.sql.*;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.text.*;
+import java.util.stream.Stream;;
+
+
 
 public class jTPCC implements jTPCCConfig {
 	private static org.apache.log4j.Logger log = Logger.getLogger(jTPCC.class);
@@ -62,6 +65,11 @@ public class jTPCC implements jTPCCConfig {
 			deliveryWeightValue = -1, stockLevelWeightValue = -1;
 	private long executionTimeMillis = -1;
 
+	private String sqlDataJsonPath = "/home/dseg/Desktop/lyb/my_benchmark/run/standard_data/result.json";
+	private BufferedReader SQLFileReader = null;
+
+	private boolean standardSQL = false;
+
 	static {
         // 每次运行时生成唯一时间戳
         System.setProperty("currentTimestamp", String.valueOf(System.currentTimeMillis()));
@@ -88,6 +96,8 @@ public class jTPCC implements jTPCCConfig {
 		} catch (IOException e) {
 			errorMessage("Term-00, could not load properties file");
 		}
+
+		readJson();
 
 		log.info("Term-00, ");
 		log.info("Term-00, +-------------------------------------------------------------+");
@@ -126,6 +136,7 @@ public class jTPCC implements jTPCCConfig {
 		String iOrderStatusWeight = getProp(ini, "orderStatusWeight");
 		String iDeliveryWeight = getProp(ini, "deliveryWeight");
 		String iStockLevelWeight = getProp(ini, "stockLevelWeight");
+		String iStandardSQL = getProp(ini,"standardSQL");
 
 
 
@@ -390,6 +401,11 @@ public class jTPCC implements jTPCCConfig {
 					deliveryWeightValue = Integer.parseInt(iDeliveryWeight);
 					stockLevelWeightValue = Integer.parseInt(iStockLevelWeight);
 
+					int IntStandardSQL = Integer.parseInt(iStandardSQL);
+					if(IntStandardSQL == 1){
+						standardSQL = true;
+					}
+
 					if (newOrderWeightValue < 0 || paymentWeightValue < 0 || orderStatusWeightValue < 0
 							|| deliveryWeightValue < 0 || stockLevelWeightValue < 0)
 						throw new NumberFormatException();
@@ -458,7 +474,7 @@ public class jTPCC implements jTPCCConfig {
 								conn, dbType,
 								transactionsPerTerminal, terminalWarehouseFixed,
 								paymentWeightValue, orderStatusWeightValue,
-								deliveryWeightValue, stockLevelWeightValue, numWarehouses, limPerMin_Terminal, this);
+								deliveryWeightValue, stockLevelWeightValue, numWarehouses, limPerMin_Terminal, this,standardSQL);
 
 						terminals[i] = terminal;
 						terminalNames[i] = terminalName;
@@ -637,7 +653,10 @@ public class jTPCC implements jTPCCConfig {
 				resultCSV.write(runID + "," +
 						term.resultLine(sessionStartTimestamp));
 				resultSQL.write(term.SQLLine(sessionStartTimestamp,transactionCount));
-			} catch (IOException e) {
+			} catch (IOException ie) {
+				log.error("Term-00, " + ie.getMessage());
+			}
+			catch(Exception e){
 				log.error("Term-00, " + e.getMessage());
 			}
 		}
@@ -657,9 +676,7 @@ public class jTPCC implements jTPCCConfig {
 
 		Collections.sort(latency_queue);
 		int queue_lenth = latency_queue.size();
-		long p50 = latency_queue.get((int)(queue_lenth*0.5));
-		long p99 = latency_queue.get((int)(queue_lenth*0.99));
-		long p999 = latency_queue.get((int)(queue_lenth*0.999));
+
 		
 
 		log.info("Term-00, ");
@@ -673,9 +690,14 @@ public class jTPCC implements jTPCCConfig {
 		log.info("Term-00, Session End       = " + sessionEnd);
 		log.info("Term-00, Value Count = " + transValCount);// change 11.13
 		log.info("Term-00, Transaction Count = " + (transactionCount - 1));
-		log.info("Term-00, latency p50 = " + p50);
-		log.info("Term-00, latency p99 = " + p99);
-		log.info("Term-00, latency p999 = " + p999);
+		if(queue_lenth!=0){
+			long p50 = latency_queue.get((int)(queue_lenth*0.5));
+			long p99 = latency_queue.get((int)(queue_lenth*0.99));
+			long p999 = latency_queue.get((int)(queue_lenth*0.999));
+			log.info("Term-00, latency p50 = " + p50);
+			log.info("Term-00, latency p99 = " + p99);
+			log.info("Term-00, latency p999 = " + p999);
+		}
 		for (String key : costPerWorkerload.keySet()) {
 			Long value = costPerWorkerload.get(key);
 			log.info("executeTime[" + key + "]=" + value.toString());
@@ -730,5 +752,37 @@ public class jTPCC implements jTPCCConfig {
 			for (int count = 0; count < 1 + informativeText.length(); count++)
 				System.out.print("\b");
 		}
+	}
+
+
+	//读取保存的transaction文件
+	private void readJson(){
+		try{
+			SQLFileReader = new BufferedReader(new FileReader(sqlDataJsonPath));
+		}
+		catch(IOException e){
+			errorMessage("Term-00, could not read JsonFile");
+		}
+	}
+
+
+	//读取单个transaction
+	synchronized public String readJsonLine(){
+		String JsonLine = "";
+		String tmpLine = "";
+		try{
+			while((tmpLine = SQLFileReader.readLine())!= null){
+				String FirstSeven = tmpLine.length() >= 11 ? tmpLine.substring(0,11) : tmpLine;
+				JsonLine+=tmpLine;
+				if(FirstSeven.equals("\"transType\"")){
+					JsonLine = JsonLine.substring(0,JsonLine.length());//去除“，”
+					return JsonLine;
+				}
+			}
+		}
+		catch(IOException e){
+			errorMessage("Term-00, could not read JsonFile");
+		}
+		return JsonLine;
 	}
 }

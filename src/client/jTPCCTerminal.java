@@ -13,7 +13,7 @@ import java.sql.*;
 import java.sql.Date;
 import java.util.*;
 import javax.swing.*;
-
+import org.json.JSONObject;
 
 public class jTPCCTerminal implements jTPCCConfig, Runnable
 {
@@ -42,6 +42,10 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
     private boolean stopRunningSignal = false;
 	private Vector<Long> latency_queue = new Vector<>();
 
+	private Vector<String> Querylist;
+
+	private boolean standardSQL;
+
     long terminalStartTime = 0;
     long transactionEnd = 0;
 
@@ -53,7 +57,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
        Connection conn, int dbType,
        int numTransactions, boolean terminalWarehouseFixed,
        int paymentWeight, int orderStatusWeight,
-       int deliveryWeight, int stockLevelWeight, int numWarehouses, int limPerMin_Terminal, jTPCC parent) throws SQLException
+       int deliveryWeight, int stockLevelWeight, int numWarehouses, int limPerMin_Terminal, jTPCC parent, boolean standardSQL) throws SQLException
     {
 	this.terminalName = terminalName;
 	this.conn = conn;
@@ -79,6 +83,8 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 	this.newOrderCounter = 0;
 	this.limPerMin_Terminal = limPerMin_Terminal;
 
+	this.standardSQL = standardSQL;
+
 	this.db = new jTPCCConnection(conn, dbType);
 
 	terminalMessage("");
@@ -88,7 +94,14 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 
     public void run()
     {
-	executeTransactions(numTransactions);
+	if(!standardSQL){
+		executeTransactions(numTransactions);
+	}
+	else{
+		executeStandardTransactions();
+	}
+
+
 	try
 	{
 	    printMessage("");
@@ -392,5 +405,52 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
     } // end transCommit()
 
 
+	// void transactionFromJson(String JsonLine){
+	// 	int head = JsonLine.indexOf(":")+1;
+	// 	int tail = JsonLine.length()-1;
+	// 	JsonLine  = JsonLine.substring(head, tail);
+	// 	JSONObject SQLJson = new JSONObject(JsonLine);
+	// 	System.out.println(SQLJson);
+	// 	String QueryString = SQLJson.getString("sql");
+	// 	String[] Querys = QueryString.split(";");
+	// 	for(String Query : Querys){
+	// 			Querylist.add(Query);
+	// 	}
+	// }
+
+
+	private void executeStandardTransactions(){
+		String SQLString = parent.readJsonLine();
+		boolean stopRunning = false;
+		while(SQLString != ""&&!stopRunning){
+			
+			try{
+				long transactionStart = System.currentTimeMillis();
+				jTPCCTData  term = new jTPCCTData(); 
+				term.executeStandardQuery(log, SQLString, db);
+				transVal = term.getTransVal_real();
+				term.traceScreen(log);
+				long transactionEnd = System.currentTimeMillis();
+				String typename = term.getTransType();
+				int neworder = 0;
+				if(typename.equals("New-Order")){
+					neworder = 1;
+				}
+				parent.signalTerminalEndedTransaction(this.terminalName, typename, transactionEnd - transactionStart, null, neworder,transVal,is_abort);
+				if(stopRunningSignal) stopRunning = true;
+			}
+			catch (CommitException e)
+			{
+				continue;
+			}
+			catch (Exception e)
+			{
+				log.fatal(e.getMessage());
+				e.printStackTrace();
+				System.exit(4);
+			}
+			SQLString = parent.readJsonLine();
+		}
+	}
 
 }

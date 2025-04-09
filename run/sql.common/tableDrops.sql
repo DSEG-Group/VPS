@@ -20,3 +20,5 @@ drop table bmsql_warehouse;
 
 drop sequence bmsql_hist_id_seq;
 
+drop database bmsql;
+

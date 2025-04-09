@@ -22,14 +22,15 @@ public class LoadData
     private static jTPCCRandom rnd;
     private static String       fileLocation = null;
     private static String       csvNullValue = null;
+	private static String       resultDirectory = null;
+	private static String       resultSQLName = null;
+	private static String 		iDB = null;
+	private static int 		    dbtype;
+
 
     private static int          numWarehouses;
     private static int          numWorkers;
     private static int          nextJob = 0;
-	private static int ExtremeHighWeight;
-	private static int HighWeight;
-	private static int NormalWeight;
-	private static int LowWeight;
     private static Object       nextJobLock = new Object();
 
     private static LoadDataWorker[] workers;
@@ -48,6 +49,15 @@ public class LoadData
     private static BufferedWriter       orderCSV = null;
     private static BufferedWriter       orderLineCSV = null;
     private static BufferedWriter       newOrderCSV = null;
+	private static BufferedWriter 		resultSQL = null;
+	
+
+	public final static int     DB_UNKNOWN = 0,
+								DB_FIREBIRD = 1,
+								DB_ORACLE = 2,
+								DB_POSTGRES = 3,
+								DB_MYSQL = 4,
+								DB_COCKROACH = 5;
 
     public static void main(String[] args) {
 	int     i;
@@ -88,6 +98,7 @@ public class LoadData
 	    System.exit(1);
 	}
 	db = iniGetString("conn");
+	// iDB = iniGetString("db");
 	dbProps = new Properties();
 	dbProps.setProperty("user", iniGetString("user"));
 	dbProps.setProperty("password", iniGetString("password"));
@@ -99,6 +110,37 @@ public class LoadData
 	numWorkers      = iniGetInt("loadWorkers", 4);
 	fileLocation    = iniGetString("fileLocation");
 	csvNullValue    = iniGetString("csvNullValue", "NULL");
+
+
+	
+	// //写死文件地址，存储创表的SQL语句
+	// resultDirectory = "/home/dseg/Desktop/lyb/my_benchmark/run/";
+	// resultSQLName = resultDirectory + "CreateDatabase.sql";
+	// File SQLFile = new File(resultSQLName);
+	// try {
+	// 	resultSQL = new BufferedWriter(new FileWriter(resultSQLName));
+	// } catch (IOException e) {
+	// 	System.exit(1);
+	// }
+
+
+	// if (iDB.equals("firebird")){
+	// 	dbtype = DB_FIREBIRD;}
+	// else if (iDB.equals("oracle")){
+	// 	dbtype = DB_ORACLE;}
+	// else if (iDB.equals("postgres")){
+	// 	dbtype = DB_POSTGRES;}
+	// else if (iDB.equals("mysql")){
+	// 	dbtype = DB_MYSQL;}
+	// else if (iDB.equals("cockroach")){
+	// 	dbtype = DB_COCKROACH;}
+	// else {
+	// 	System.out.print("not such db\n");
+	// 	return;
+	// }
+
+
+
 
 	// ExtremeHighWeight = iniGetInt("ExtremeHighWeight");
 	// HighWeight = iniGetInt("HighWeight");
@@ -160,10 +202,10 @@ public class LoadData
 		dbConn.setAutoCommit(false);
 		if (writeCSV)
 		    workers[i] = new LoadDataWorker(i, csvNullValue,
-							rnd.newRandom());
+							rnd.newRandom(),dbtype);
 		else
 		    workers[i] = new LoadDataWorker(i, dbConn,
-							rnd.newRandom());
+							rnd.newRandom(),dbtype);
 		workerThreads[i] = new Thread(workers[i]);
 		workerThreads[i].start();
 	    }
@@ -189,6 +231,7 @@ public class LoadData
 	    }
 	}
 
+
 	/*
 	 * Close the CSV files if we are writing them.
 	 */
@@ -213,7 +256,34 @@ public class LoadData
 		System.exit(3);
 	    }
 	}
+	// if (resultSQL != null) {
+	// 	try {
+	// 		resultSQL.close();
+	// 	} catch (IOException e) {};
+	// }
     } // End of main()
+
+	// public static void SQLAppend(String SQLString){
+	//     synchronized(resultSQL){
+	// 		try {
+	// 			resultSQL.write(SQLString);
+	// 		}
+	// 		catch (Exception ie)
+	// 		{
+	// 		System.err.println("ERROR:  write"+
+	// 				ie.getMessage());
+	// 		System.exit(4);
+	// 		}
+	// 	}
+	// }
+
+	// public void writeSQLFile(String SQLString){
+	// 	try{
+	// 		resultSQL.write(SQLString);
+	// 	}catch(IOException e){
+	// 		System.err.println(e.getMessage());
+	// 	}
+	// }
 
     public static void configAppend(StringBuffer buf)
 	throws IOException

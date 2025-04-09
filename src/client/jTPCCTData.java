@@ -10,6 +10,7 @@ import org.apache.log4j.*;
 
 import java.util.*;
 import java.sql.*;
+import org.json.JSONObject;
 
 
 
@@ -82,6 +83,8 @@ public class jTPCCTData {
 
 	private StringBuffer resultSB = new StringBuffer();
 	private Formatter resultFmt = new Formatter(resultSB);
+
+	private Vector<String> Querylist = new Vector<String>();
 
 	public void setNumWarehouses(int num) {
 		numWarehouses = num;
@@ -254,11 +257,37 @@ public class jTPCCTData {
 		return line;
 	}
 
-	public String SQLLine(long sessionStart,long i){
-		SQLString = i + ":\n{\"sql\":\"BEGIN;\n" + SQLString;
-		SQLString += "COMMIT;\",\n";
-		SQLString += "\"value\":"+"\""+transVal_real+"\"},\n";
-		return SQLString;
+	public String SQLLine(long sessionStart,long i)throws Exception{
+		if(transType != TT_DELIVERY){
+			if(SQLString!=""){
+				SQLString = i + ":\n{\"sql\":\"BEGIN;\n" + SQLString;
+				SQLString += "\"value\":"+"\""+transVal_real+"\",\n";
+				switch (transType) {
+					case TT_NEW_ORDER:
+						SQLString += "\"transType\":\"New-Order\"},\n";
+						break;
+					case TT_PAYMENT:
+						SQLString += "\"transType\":\"Payment\"},\n";
+						break;
+					case TT_DELIVERY_BG:
+						SQLString += "\"transType\":\"Delivery\"},\n";
+						break;
+					case TT_ORDER_STATUS:
+						SQLString += "\"transType\":\"Order-Status\"},\n";
+						break;
+					case TT_STOCK_LEVEL:
+						SQLString += "\"transType\":\"Stock-Level\"},\n";
+						break;
+					default:
+						throw new Exception("Unknown transType " + transType);
+				}
+			}
+			return SQLString;
+		}
+		else{
+			return "";
+		}
+		
 	}
 
 	public long get_latency(){
@@ -449,6 +478,7 @@ public class jTPCCTData {
 						abort = 1;
 						rs.close();
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -493,6 +523,7 @@ public class jTPCCTData {
 						abort = 1;
 						rs.close();
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -538,6 +569,7 @@ public class jTPCCTData {
 					if (poss < 100 * abortPoss) {
 						abort = 1;
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -574,6 +606,7 @@ public class jTPCCTData {
 					if (poss < 100 * abortPoss) {
 						abort = 1;
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -606,6 +639,7 @@ public class jTPCCTData {
 					if (poss < 100 * abortPoss) {
 						abort = 1;
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -654,6 +688,7 @@ public class jTPCCTData {
 						abort = 1;
 						rs.close();
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -688,6 +723,7 @@ public class jTPCCTData {
 						 * that now in order to satisfy 2.4.2.3.
 						 */
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 					// This ITEM should have been there.
@@ -725,6 +761,7 @@ public class jTPCCTData {
 						abort = 1;
 						rs.close();
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -818,7 +855,12 @@ public class jTPCCTData {
 				insertOrderLineBatch.setInt(7, newOrder.ol_quantity[seq]);
 				insertOrderLineBatch.setDouble(8, newOrder.ol_amount[seq]);
 				insertOrderLineBatch.setString(9, newOrder.dist_value[seq]);
-				SQLString += insertOrderLineBatch.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				if(dbType == DB_MYSQL){
+					SQLString += insertOrderLineBatch.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				}
+				else{
+					SQLString += insertOrderLineBatch.toString()+";\n";
+				}
 				insertOrderLineBatch.addBatch();
 			}
 
@@ -837,6 +879,7 @@ public class jTPCCTData {
 					if (poss < 100 * abortPoss) {
 						abort = 1;
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -878,6 +921,7 @@ public class jTPCCTData {
 					}
 			}
 			db.commit();
+			SQLString += "COMMIT;\",\n";
 
 
 
@@ -890,6 +934,7 @@ public class jTPCCTData {
 			
 			try {
 				db.rollback();
+				SQLString += "Abort;\",\n";
 				db.stmtNewOrderInsertOrderLine.clearBatch();
 			} catch (SQLException se2) {
 				throw new Exception("Unexpected SQLException on rollback: " +
@@ -898,6 +943,7 @@ public class jTPCCTData {
 		} catch (Exception e) {
 			try {
 				db.rollback();
+				SQLString += "Abort;\",\n";
 				db.stmtNewOrderInsertOrderLine.clearBatch();
 			} catch (SQLException se2) {
 				throw new Exception("Unexpected SQLException on rollback: " +
@@ -1125,6 +1171,7 @@ public class jTPCCTData {
 						abort = 1;
 						rs.close();
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -1146,6 +1193,7 @@ public class jTPCCTData {
 			if (!rs.next()) {
 				abort = 1;
 				db.rollback();
+				SQLString += "Abort;\",\n";
 				return;
 			}
 
@@ -1196,6 +1244,7 @@ public class jTPCCTData {
 						abort = 1;
 						rs.close();
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -1225,6 +1274,7 @@ public class jTPCCTData {
 					if (poss < 100 * abortPoss) {
 						abort = 1;
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -1257,6 +1307,7 @@ public class jTPCCTData {
 						abort = 1;
 						rs.close();
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -1295,6 +1346,7 @@ public class jTPCCTData {
 					if (poss < 100 * abortPoss) {
 						abort = 1;
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -1326,6 +1378,7 @@ public class jTPCCTData {
 					if (poss < 100 * abortPoss) {
 						abort = 1;
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -1371,6 +1424,7 @@ public class jTPCCTData {
 					if (poss < 100 * abortPoss) {
 						abort = 1;
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -1402,6 +1456,7 @@ public class jTPCCTData {
 						abort = 1;
 						rs.close();
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -1490,6 +1545,7 @@ public class jTPCCTData {
 						abort = 1;
 						rs.close();
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -1552,6 +1608,7 @@ public class jTPCCTData {
 						if (poss < 100 * abortPoss) {
 							abort = 1;
 							db.rollback();
+							SQLString += "Abort;\",\n";
 							return;
 						}
 					}
@@ -1586,6 +1643,7 @@ public class jTPCCTData {
 							abort = 1;
 							rs.close();
 							db.rollback();
+							SQLString += "Abort;\",\n";
 							return;
 						}
 					}
@@ -1641,6 +1699,7 @@ public class jTPCCTData {
 						if (poss < 100 * abortPoss) {
 							abort = 1;
 							db.rollback();
+							SQLString += "Abort;\",\n";
 							return;
 						}
 					}
@@ -1679,6 +1738,7 @@ public class jTPCCTData {
 					if (poss < 100 * abortPoss) {
 						abort = 1;
 						db.rollback();
+						SQLString += "Abort;\",\n";
 						return;
 					}
 				}
@@ -1701,6 +1761,7 @@ public class jTPCCTData {
 			}
 			
 			db.commit();
+			SQLString += "COMMIT;\",\n";
 		} catch (SQLException se) {
 			log.error("Unexpected SQLException in PAYMENT");
 			for (SQLException x = se; x != null; x = x.getNextException())
@@ -1709,6 +1770,7 @@ public class jTPCCTData {
 
 			try {
 				db.rollback();
+				SQLString += "Abort;\",\n";
 			} catch (SQLException se2) {
 				throw new Exception("Unexpected SQLException on rollback: " +
 						se2.getMessage());
@@ -1716,6 +1778,7 @@ public class jTPCCTData {
 		} catch (Exception e) {
 			try {
 				db.rollback();
+				SQLString += "Abort;\",\n";
 			} catch (SQLException se2) {
 				throw new Exception("Unexpected SQLException on rollback: " +
 						se2.getMessage());
@@ -2010,7 +2073,8 @@ public class jTPCCTData {
 				ol_idx++;
 			}
 
-			db.rollback();
+			db.commit();
+			SQLString += "Commit;\",\n";
 		} catch (SQLException se) {
 			log.error("Unexpected SQLException in ORDER_STATUS");
 			for (SQLException x = se; x != null; x = x.getNextException())
@@ -2019,6 +2083,7 @@ public class jTPCCTData {
 
 			try {
 				db.rollback();
+				SQLString += "Abort;\",\n";
 			} catch (SQLException se2) {
 				throw new Exception("Unexpected SQLException on rollback: " +
 						se2.getMessage());
@@ -2026,6 +2091,7 @@ public class jTPCCTData {
 		} catch (Exception e) {
 			try {
 				db.rollback();
+				SQLString += "Abort;\",\n";
 			} catch (SQLException se2) {
 				throw new Exception("Unexpected SQLException on rollback: " +
 						se2.getMessage());
@@ -2170,7 +2236,8 @@ public class jTPCCTData {
 			stockLevel.low_stock = rs.getInt("low_stock");
 			rs.close();
 
-			db.rollback();
+			db.commit();
+			SQLString += "Commit;\",\n";
 		} catch (SQLException se) {
 			log.error("Unexpected SQLException in STOCK_LEVEL");
 			for (SQLException x = se; x != null; x = x.getNextException())
@@ -2179,6 +2246,7 @@ public class jTPCCTData {
 
 			try {
 				db.rollback();
+				SQLString += "Abort;\",\n";
 			} catch (SQLException se2) {
 				throw new Exception("Unexpected SQLException on rollback: " +
 						se2.getMessage());
@@ -2186,6 +2254,7 @@ public class jTPCCTData {
 		} catch (Exception e) {
 			try {
 				db.rollback();
+				SQLString += "Abort;\",\n";
 			} catch (SQLException se2) {
 				throw new Exception("Unexpected SQLException on rollback: " +
 						se2.getMessage());
@@ -2387,7 +2456,12 @@ public class jTPCCTData {
 					stmt1.setInt(1, deliveryBG.w_id);
 					stmt1.setInt(2, d_id);
 
-					SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					if(dbType == DB_MYSQL){
+						SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					}
+					else{
+						SQLString += stmt1.toString()+";\n";
+					}
 
 					rs = stmt1.executeQuery();
 					if (!rs.next()) {
@@ -2417,7 +2491,13 @@ public class jTPCCTData {
 				stmt1.setInt(d_id * 3, deliveryBG.delivered_o_id[d_id - 1]);
 			}
 
-			SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt1.toString()+";\n";
+			}
+			
 
 			stmt1.executeUpdate();
 
@@ -2436,7 +2516,12 @@ public class jTPCCTData {
 				stmt1.setInt(d_id * 3 + 1, deliveryBG.delivered_o_id[d_id - 1]);
 			}
 
-			SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt1.toString()+";\n";
+			}
 
 			stmt1.executeUpdate();
 
@@ -2448,7 +2533,12 @@ public class jTPCCTData {
 				stmt1.setInt(d_id * 3, deliveryBG.delivered_o_id[d_id - 1]);
 			}
 
-			SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt1.toString()+";\n";
+			}
 
 			rs = stmt1.executeQuery();
 			while (rs.next()) {
@@ -2476,7 +2566,12 @@ public class jTPCCTData {
 				stmt1.setInt(d_id * 3 + 1, deliveryBG.delivered_o_id[d_id - 1]);
 			}
 
-			SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt1.toString()+";\n";
+			}
 
 			stmt1.executeUpdate();
 
@@ -2489,7 +2584,12 @@ public class jTPCCTData {
 				stmt1.setInt(d_id * 3, deliveryBG.delivered_o_id[d_id - 1]);
 			}
 
-			SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			if(dbType == DB_MYSQL){
+				SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			}
+			else{
+				SQLString += stmt1.toString()+";\n";
+			}
 
 			rs = stmt1.executeQuery();
 
@@ -2518,12 +2618,18 @@ public class jTPCCTData {
 				stmt1.setInt(2, d_id);
 				stmt1.setInt(3, c_id);
 
-				SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				if(dbType == DB_MYSQL){
+					SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				}
+				else{
+					SQLString += stmt1.toString()+";\n";
+				}
 
 				stmt1.executeUpdate();
 				// Recored the delivered O_ID in the DELIVERY_BG
 			}
 			db.commit();
+			SQLString += "COMMIT;\",\n";
 		} catch (SQLException se) {
 			log.error("Unexpected SQLException in DELIVERY_BG");
 			for (SQLException x = se; x != null; x = x.getNextException())
@@ -2532,6 +2638,7 @@ public class jTPCCTData {
 
 			try {
 				db.rollback();
+				SQLString += "Abort;\",\n";
 			} catch (SQLException se2) {
 				throw new Exception("Unexpected SQLException on rollback: " +
 						se2.getMessage());
@@ -2539,6 +2646,7 @@ public class jTPCCTData {
 		} catch (Exception e) {
 			try {
 				db.rollback();
+				SQLString += "Abort;\",\n";
 			} catch (SQLException se2) {
 				throw new Exception("Unexpected SQLException on rollback: " +
 						se2.getMessage());
@@ -2590,4 +2698,85 @@ public class jTPCCTData {
 	public int get_abort(){
 		return abort;
 	}
+
+	private void transactionFromJson(String JsonLine){
+		int head = JsonLine.indexOf(":")+1;
+		int tail = JsonLine.length()-1;
+		JsonLine  = JsonLine.substring(head, tail);
+		JSONObject SQLJson = new JSONObject(JsonLine);
+		//System.out.println(SQLJson);
+		String QueryString = SQLJson.getString("sql");
+		String[] Querys = QueryString.split(";");
+		for(int i = 1;i<Querys.length;i++){//去掉Begin和Commit
+				Querylist.add(Querys[i]);
+		}
+		String ValueString = SQLJson.getString("value");
+		this.transVal_real = Double.parseDouble(ValueString);
+
+		String type = SQLJson.getString("transType");
+		if(type.equals("New-Order")){
+			this.transType = TT_NEW_ORDER;
+		}
+		else if(type.equals("Payment")){
+			this.transType = TT_PAYMENT;
+		}
+		else if(type.equals("Stock-Level")){
+			this.transType = TT_STOCK_LEVEL;
+		}
+		else if(type.equals("Order-Status")){
+			this.transType = TT_ORDER_STATUS;
+		}
+		else{
+			this.transType = TT_DELIVERY;
+		}
+	}
+
+
+	public void executeStandardQuery(Logger log, String JsonString,jTPCCConnection db)throws Exception{
+		transactionFromJson(JsonString);
+		int len = Querylist.size();
+		String Query = "";
+		try {
+			for(int i  = 0;i<len -2 ;i++){
+				Query = Querylist.get(i);
+				db.setStandardQuery(Query);
+				PreparedStatement stmt = db.stmtStandardQuery;
+				stmt.execute();
+			}
+			Query = Querylist.get(len-1);
+			if(Query.equals("Abort")){
+				db.rollback();
+			}
+			else{
+				db.commit();
+			}
+		}catch (SQLException se) {
+			log.error("Unexpected SQLException");
+			log.error(Query);
+			for (SQLException x = se; x != null; x = x.getNextException())
+				log.error(x.getMessage());
+			se.printStackTrace();
+
+			try {
+				db.rollback();
+			} catch (SQLException se2) {
+				throw new Exception("Unexpected SQLException on rollback: " +
+						se2.getMessage());
+			}
+			} catch (Exception e) {
+				try {
+					db.rollback();
+				} catch (SQLException se2) {
+					throw new Exception("Unexpected SQLException on rollback: " +
+							se2.getMessage());
+				}
+				throw new Exception(Query + "\nUnexpected Exception :" +
+				e.getMessage());
+			}
+	}
+
+	public String getTransType(){
+		return transTypeNames[this.transType];
+	}
+
 }
