@@ -17,7 +17,8 @@ import java.sql.*;
 import java.util.*;
 import java.util.regex.Pattern;
 import java.text.*;
-import java.util.stream.Stream;;
+import java.util.stream.Stream;
+
 
 
 
@@ -31,15 +32,18 @@ public class jTPCC implements jTPCCConfig {
 
 	private int dbType = DB_UNKNOWN;
 	private int currentlyDisplayedTerminal;
+	private boolean isHeap = false;
 
 	private jTPCCTerminal[] terminals;
 	private String[] terminalNames;
 	private boolean terminalsBlockingExit = false;
 	private long terminalsStarted = 0, sessionCount = 0, transactionCount = 0, transValCount = 0;// change 11.13
+	private long abortCount = 0;
 	private Object counterLock = new Object();
 
-	private long newOrderCounter = 0, sessionStartTimestamp, sessionEndTimestamp, sessionNextTimestamp = 0,
+	private long newOrderCounter = 0, sessionStartTimestamp, sessionEndTimestamp, sessionNextTimestamp = 0,nextChangeTime = 0,
 			sessionNextKounter = 0;
+	private long epochStartTime, epochEndTime;
 	private long sessionEndTargetTime = -1, fastNewOrderCounter, recentTpmC = 0, recentTpmTotal = 0;
 	private boolean signalTerminalsRequestEndSent = false, databaseDriverLoaded = false;
 
@@ -55,20 +59,39 @@ public class jTPCC implements jTPCCConfig {
 
 	private int numTerminals = -1;
 	private Vector<Long>latency_queue = new Vector<>();
+	private Vector<Long>E_H_latency_q = new Vector<>();
+	private Vector<Long>H_latency_q = new Vector<>();
+	private Vector<Long>N_latency_q = new Vector<>();
+	private Vector<Long>L_latency_q = new Vector<>();
 
 	private boolean limitIsTime;
 				
 	private int transactionsPerTerminal = -1;
 	private int numWarehouses = -1;
 	private int loadWarehouses = -1;
-	private int newOrderWeightValue = -1, paymentWeightValue = -1, orderStatusWeightValue = -1,
-			deliveryWeightValue = -1, stockLevelWeightValue = -1;
+	private int[] newOrderWeightValue = {-1,-1}, paymentWeightValue = {-1,-1}, orderStatusWeightValue  = {-1,-1},
+			deliveryWeightValue  = {-1,-1}, stockLevelWeightValue  = {-1,-1};
+	private long changeTime = 0;//运行若干时间后workload的各种事务权重发生变化。
 	private long executionTimeMillis = -1;
 
-	private String sqlDataJsonPath = "/home/dseg/Desktop/lyb/my_benchmark/run/standard_data/result.json";
+	private String sqlDataJsonPath = "./standard_data/result.json";
 	private BufferedReader SQLFileReader = null;
 
 	private boolean standardSQL = false;
+	public Heap Tree;
+	private int limitValue;
+
+	private int total_txn;
+
+	private long lastEpochValue = 0;
+	private long lastEpochTransCount = 0;
+	private boolean value_loss = false;
+
+	private Vector<Double> epochVpmTotalRecords = new Vector<>();
+	private Vector<Double> epochTpmTotalRecords = new Vector<>();
+	
+	private LRUCache<Integer,Double> hot_item = new LRUCache<>(20);
+
 
 	static {
         // 每次运行时生成唯一时间戳
@@ -97,7 +120,7 @@ public class jTPCC implements jTPCCConfig {
 			errorMessage("Term-00, could not load properties file");
 		}
 
-		readJson();
+		
 
 		log.info("Term-00, ");
 		log.info("Term-00, +-------------------------------------------------------------+");
@@ -120,6 +143,7 @@ public class jTPCC implements jTPCCConfig {
 
 		String iRunTxnsPerTerminal = ini.getProperty("runTxnsPerTerminal");
 		String iRunMins = ini.getProperty("runMins");
+		Tree = new Heap();
 		if (Integer.parseInt(iRunTxnsPerTerminal) == 0 && Integer.parseInt(iRunMins) != 0) {
 			log.info("Term-00, runMins" + "=" + iRunMins);
 		} else if (Integer.parseInt(iRunTxnsPerTerminal) != 0 && Integer.parseInt(iRunMins) == 0) {
@@ -131,18 +155,40 @@ public class jTPCC implements jTPCCConfig {
 		String limPerMin = getProp(ini, "limitTxnsPerMin");
 		String iTermWhseFixed = getProp(ini, "terminalWarehouseFixed");
 		log.info("Term-00, ");
-		String iNewOrderWeight = getProp(ini, "newOrderWeight");
-		String iPaymentWeight = getProp(ini, "paymentWeight");
-		String iOrderStatusWeight = getProp(ini, "orderStatusWeight");
-		String iDeliveryWeight = getProp(ini, "deliveryWeight");
-		String iStockLevelWeight = getProp(ini, "stockLevelWeight");
+		String iNewOrderWeight_1 = getProp(ini, "newOrderWeight_1");
+		String iPaymentWeight_1 = getProp(ini, "paymentWeight_1");
+		String iOrderStatusWeight_1 = getProp(ini, "orderStatusWeight_1");
+		String iDeliveryWeight_1 = getProp(ini, "deliveryWeight_1");
+		String iStockLevelWeight_1 = getProp(ini, "stockLevelWeight_1");
+
+		String iNewOrderWeight_2 = getProp(ini, "newOrderWeight_2");
+		String iPaymentWeight_2 = getProp(ini, "paymentWeight_2");
+		String iOrderStatusWeight_2 = getProp(ini, "orderStatusWeight_2");
+		String iDeliveryWeight_2 = getProp(ini, "deliveryWeight_2");
+		String iStockLevelWeight_2 = getProp(ini, "stockLevelWeight_2");
+
+		String iChangeTime = getProp(ini, "changTime_second");
+
 		String iStandardSQL = getProp(ini,"standardSQL");
+		String iIsHeap = getProp(ini,"heapSQL");
+		String iTotal_txn = getProp(ini, "total_txn");
+		String iLimitValue = getProp(ini, "limitValue");
+		String iValueLoss = getProp(ini,"value_loss");
 
 
 
 		log.info("Term-00, ");
 		String resultDirectory = getProp(ini, "resultDirectory");
 		String osCollectorScript = getProp(ini, "osCollectorScript");
+		
+		if(iDB.equals("postgres")){
+			sqlDataJsonPath = "./standard_data/pg_result.json";
+		}
+		else if(iDB.equals("mysql")){
+			sqlDataJsonPath = "./standard_data/mysql_result.json";
+		}
+
+		readJson();
 
 		log.info("Term-00, ");
 
@@ -161,6 +207,13 @@ public class jTPCC implements jTPCCConfig {
 			return;
 		}
 
+		if (iValueLoss.equals("1")){
+			value_loss = true;
+		} 
+		else{
+			value_loss = false;
+		}
+
 		if (Integer.parseInt(limPerMin) != 0) {
 			limPerMin_Terminal = Integer.parseInt(limPerMin) / Integer.parseInt(iTerminals);
 		} else {
@@ -168,6 +221,8 @@ public class jTPCC implements jTPCCConfig {
 		}
 
 		boolean iRunMinsBool = false;
+
+		changeTime = Long.parseLong(iChangeTime);
 
 		try {
 			String driver = iDriver;
@@ -372,9 +427,9 @@ public class jTPCC implements jTPCCConfig {
 					throw new Exception();
 				}
 
-				if (Long.parseLong(iRunMins) != 0 && Integer.parseInt(iRunTxnsPerTerminal) == 0) {
+				if (Double.parseDouble(iRunMins) != 0 && Integer.parseInt(iRunTxnsPerTerminal) == 0) {
 					try {
-						executionTimeMillis = Long.parseLong(iRunMins) * 60000;
+						executionTimeMillis = (long)(Double.parseDouble(iRunMins) * 1000);
 						if (executionTimeMillis <= 0)
 							throw new NumberFormatException();
 					} catch (NumberFormatException e1) {
@@ -393,34 +448,79 @@ public class jTPCC implements jTPCCConfig {
 				}
 
 				terminalWarehouseFixed = Boolean.parseBoolean(iTermWhseFixed);
+				int IntStandardSQL = Integer.parseInt(iStandardSQL);
+				int IntIsHeap = Integer.parseInt(iIsHeap);
 
 				try {
-					newOrderWeightValue = Integer.parseInt(iNewOrderWeight);
-					paymentWeightValue = Integer.parseInt(iPaymentWeight);
-					orderStatusWeightValue = Integer.parseInt(iOrderStatusWeight);
-					deliveryWeightValue = Integer.parseInt(iDeliveryWeight);
-					stockLevelWeightValue = Integer.parseInt(iStockLevelWeight);
+					newOrderWeightValue[0] = Integer.parseInt(iNewOrderWeight_1);
+					paymentWeightValue[0] = Integer.parseInt(iPaymentWeight_1);
+					orderStatusWeightValue[0] = Integer.parseInt(iOrderStatusWeight_1);
+					deliveryWeightValue[0] = Integer.parseInt(iDeliveryWeight_1);
+					stockLevelWeightValue[0] = Integer.parseInt(iStockLevelWeight_1);
 
-					int IntStandardSQL = Integer.parseInt(iStandardSQL);
-					if(IntStandardSQL == 1){
-						standardSQL = true;
+					if(changeTime>=0){
+						newOrderWeightValue[1] = Integer.parseInt(iNewOrderWeight_2);
+						paymentWeightValue[1] = Integer.parseInt(iPaymentWeight_2);
+						orderStatusWeightValue[1] = Integer.parseInt(iOrderStatusWeight_2);
+						deliveryWeightValue[1] = Integer.parseInt(iDeliveryWeight_2);
+						stockLevelWeightValue[1] = Integer.parseInt(iStockLevelWeight_2);
 					}
 
-					if (newOrderWeightValue < 0 || paymentWeightValue < 0 || orderStatusWeightValue < 0
-							|| deliveryWeightValue < 0 || stockLevelWeightValue < 0)
+					
+					
+					total_txn = Integer.parseInt(iTotal_txn);
+					limitValue = Integer.parseInt(iLimitValue);
+
+
+					if(IntIsHeap == 1&& IntStandardSQL == 1){
 						throw new NumberFormatException();
-					else if (newOrderWeightValue == 0 && paymentWeightValue == 0 && orderStatusWeightValue == 0
-							&& deliveryWeightValue == 0 && stockLevelWeightValue == 0)
+					}
+					if(IntStandardSQL == 1){
+						standardSQL = true;
+						isHeap = false;
+					}
+					if(IntIsHeap == 1){
+						standardSQL = false;
+						isHeap = true;
+					}
+
+					if (newOrderWeightValue[0] < 0 || paymentWeightValue[0] < 0 || orderStatusWeightValue[0] < 0
+							|| deliveryWeightValue[0] < 0 || stockLevelWeightValue[0] < 0)
 						throw new NumberFormatException();
+					else if (newOrderWeightValue[0] == 0 && paymentWeightValue[0] == 0 && orderStatusWeightValue[0] == 0
+							&& deliveryWeightValue[0] == 0 && stockLevelWeightValue[0] == 0)
+						throw new NumberFormatException();
+
+					if(changeTime>0){
+						if (newOrderWeightValue[1] < 0 || paymentWeightValue[1] < 0 || orderStatusWeightValue[1] < 0
+							|| deliveryWeightValue[1] < 0 || stockLevelWeightValue[1] < 0)
+						throw new NumberFormatException();
+						else if (newOrderWeightValue[1] == 0 && paymentWeightValue[1] == 0 && orderStatusWeightValue[1] == 0
+							&& deliveryWeightValue[1] == 0 && stockLevelWeightValue[1] == 0)
+						throw new NumberFormatException();
+					}
+
 				} catch (NumberFormatException e1) {
+					if(IntIsHeap == 1&& IntStandardSQL == 1){
+						errorMessage("heapSQL and standardSQL can't be 1 at the same time!");
+						throw new Exception();
+					}
 					errorMessage("Invalid number in mix percentage!");
 					throw new Exception();
 				}
 
-				if (newOrderWeightValue + paymentWeightValue + orderStatusWeightValue + deliveryWeightValue
-						+ stockLevelWeightValue > 100) {
+				if (newOrderWeightValue[0] + paymentWeightValue[0] + orderStatusWeightValue[0] + deliveryWeightValue[0]
+						+ stockLevelWeightValue[0] > 100) {
 					errorMessage("Sum of mix percentage parameters exceeds 100%!");
 					throw new Exception();
+				}
+
+				if(changeTime>0){
+					if (newOrderWeightValue[1] + paymentWeightValue[1] + orderStatusWeightValue[1] + deliveryWeightValue[1]
+						+ stockLevelWeightValue[1] > 100) {
+					errorMessage("Sum of mix percentage parameters exceeds 100%!");
+					throw new Exception();
+					}
 				}
 
 				newOrderCounter = 0;
@@ -435,14 +535,23 @@ public class jTPCC implements jTPCCConfig {
 					printMessage("Terminal Warehouse is fixed");
 				else
 					printMessage("Terminal Warehouse is NOT fixed");
-				printMessage("Transaction Weights: " + newOrderWeightValue + "% New-Order, " + paymentWeightValue
-						+ "% Payment, " + orderStatusWeightValue + "% Order-Status, " + deliveryWeightValue
-						+ "% Delivery, " + stockLevelWeightValue + "% Stock-Level");
+				printMessage("Transaction Weights version 1: " + newOrderWeightValue[0] + "% New-Order, " + paymentWeightValue[0]
+						+ "% Payment, " + orderStatusWeightValue[0] + "% Order-Status, " + deliveryWeightValue[0]
+						+ "% Delivery, " + stockLevelWeightValue[0] + "% Stock-Level");
+				
+				printMessage("Transaction Weights version 2: " + newOrderWeightValue[1] + "% New-Order, " + paymentWeightValue[1]
+						+ "% Payment, " + orderStatusWeightValue[1] + "% Order-Status, " + deliveryWeightValue[1]
+						+ "% Delivery, " + stockLevelWeightValue[1] + "% Stock-Level");
 
 				printMessage("Number of Terminals\t" + numTerminals);
-
-				terminals = new jTPCCTerminal[numTerminals];
-				terminalNames = new String[numTerminals];
+				if(isHeap){
+					terminals = new jTPCCTerminal[numTerminals+1];
+					terminalNames = new String[numTerminals+1];
+				}
+				else{
+					terminals = new jTPCCTerminal[numTerminals];
+					terminalNames = new String[numTerminals];
+				}
 				terminalsStarted = numTerminals;
 				try {
 					String database = iConn;
@@ -454,7 +563,7 @@ public class jTPCC implements jTPCCConfig {
 						for (int j = 0; j < 10; j++)
 							usedTerminals[i][j] = 0;
 
-					for (int i = 0; i < numTerminals; i++) {
+					for (int i = 0; i <= numTerminals; i++) {
 						int terminalWarehouseID;
 						int terminalDistrictID;
 						// do {
@@ -468,28 +577,44 @@ public class jTPCC implements jTPCCConfig {
 						printMessage("Creating database connection for " + terminalName + "...");
 						conn = DriverManager.getConnection(database, dbProps);
 						conn.setAutoCommit(false);
+						if(i < numTerminals){
+							jTPCCTerminal terminal = new jTPCCTerminal(terminalName, terminalWarehouseID,
+									terminalDistrictID,
+									conn, dbType,
+									transactionsPerTerminal, terminalWarehouseFixed,
+									paymentWeightValue, orderStatusWeightValue,
+									deliveryWeightValue, stockLevelWeightValue, numWarehouses, limPerMin_Terminal, this,standardSQL,isHeap,false,changeTime,value_loss);
 
-						jTPCCTerminal terminal = new jTPCCTerminal(terminalName, terminalWarehouseID,
-								terminalDistrictID,
-								conn, dbType,
-								transactionsPerTerminal, terminalWarehouseFixed,
-								paymentWeightValue, orderStatusWeightValue,
-								deliveryWeightValue, stockLevelWeightValue, numWarehouses, limPerMin_Terminal, this,standardSQL);
+							terminals[i] = terminal;
+							terminalNames[i] = terminalName;
+							printMessage(terminalName + "\t" + terminalWarehouseID);
+						}
+						else{
+							if(isHeap){
+								jTPCCTerminal terminal = new jTPCCTerminal(terminalName, terminalWarehouseID,
+										terminalDistrictID,
+										conn, dbType,
+										transactionsPerTerminal, terminalWarehouseFixed,
+										paymentWeightValue, orderStatusWeightValue,
+										deliveryWeightValue, stockLevelWeightValue, numWarehouses, limPerMin_Terminal, this,standardSQL,false,true,changeTime,value_loss);
 
-						terminals[i] = terminal;
-						terminalNames[i] = terminalName;
-						printMessage(terminalName + "\t" + terminalWarehouseID);
+								terminals[i] = terminal;
+								terminalNames[i] = terminalName;
+								printMessage(terminalName + "\t" + terminalWarehouseID);
+								terminalsStarted++;
+							}
+						}
 					}
 
 					sessionEndTargetTime = executionTimeMillis;
 					signalTerminalsRequestEndSent = false;
 
 					printMessage("Transaction\tWeight");
-					printMessage("% New-Order\t" + newOrderWeightValue);
-					printMessage("% Payment\t" + paymentWeightValue);
-					printMessage("% Order-Status\t" + orderStatusWeightValue);
-					printMessage("% Delivery\t" + deliveryWeightValue);
-					printMessage("% Stock-Level\t" + stockLevelWeightValue);
+					printMessage("% New-Order\t" + newOrderWeightValue[0]);
+					printMessage("% Payment\t" + paymentWeightValue[0]);
+					printMessage("% Order-Status\t" + orderStatusWeightValue[0]);
+					printMessage("% Delivery\t" + deliveryWeightValue[0]);
+					printMessage("% Stock-Level\t" + stockLevelWeightValue[0]);
 
 					printMessage("Transaction Number\tTerminal\tType\tExecution Time (ms)\t\tComment");
 
@@ -499,6 +624,8 @@ public class jTPCC implements jTPCCConfig {
 					// Create Terminals, Start Transactions
 					sessionStart = getCurrentTime();
 					sessionStartTimestamp = System.currentTimeMillis();
+					nextChangeTime = sessionStartTimestamp;
+					epochStartTime = sessionStartTimestamp;
 					sessionNextTimestamp = sessionStartTimestamp;
 					if (sessionEndTargetTime != -1)
 						sessionEndTargetTime += sessionStartTimestamp;
@@ -568,7 +695,7 @@ public class jTPCC implements jTPCCConfig {
 		}
 	}
 
-	public void signalTerminalEnded(jTPCCTerminal terminal, long countNewOrdersExecuted,Vector<Long>t_latency_queue) {
+	public void signalTerminalEnded(jTPCCTerminal terminal, long countNewOrdersExecuted,Vector<Long>t_latency_queue, Vector<Long>E_H_latency_q,Vector<Long>H_latency_q,Vector<Long>N_latency_q,Vector<Long>L_latency_q) {
 		synchronized (terminals) {
 			boolean found = false;
 			terminalsStarted--;
@@ -581,6 +708,10 @@ public class jTPCC implements jTPCCConfig {
 				}
 			}
 			this.latency_queue.addAll(t_latency_queue);
+			this.E_H_latency_q.addAll(E_H_latency_q);
+			this.H_latency_q.addAll(H_latency_q);
+			this.N_latency_q.addAll(N_latency_q);
+			this.L_latency_q.addAll(L_latency_q);
 		}
 
 		if (terminalsStarted == 0) {
@@ -622,8 +753,7 @@ public class jTPCC implements jTPCCConfig {
 	public void signalTerminalEndedTransaction(String terminalName, String transactionType, long executionTime,
 			String comment, int newOrder, double transVal, int is_abort) {
 		synchronized (counterLock) {
-			if(is_abort!=1){
-				transactionCount++;
+			transactionCount++;
 			transValCount += transVal;// change 11.13
 			fastNewOrderCounter += newOrder;
 			Long counter = costPerWorkerload.get(transactionType);
@@ -632,7 +762,15 @@ public class jTPCC implements jTPCCConfig {
 			} else {
 				costPerWorkerload.put(transactionType, counter + executionTime);
 			}
+			if(is_abort == 1){
+				abortCount++;
 			}
+		}
+		if(total_txn !=0 && total_txn<=transactionCount){
+			signalTerminalsRequestEnd(true);
+		}
+		if(limitValue != 0 && limitValue <= transValCount){
+			signalTerminalsRequestEnd(true);
 		}
 
 		if (sessionEndTargetTime != -1 && System.currentTimeMillis() > sessionEndTargetTime) {
@@ -647,12 +785,14 @@ public class jTPCC implements jTPCCConfig {
 		return rnd;
 	}
 
-	public void resultAppend(jTPCCTData term) {
+	public void resultAppend(jTPCCTData term,boolean isStandard) {
 		if (resultCSV != null) {
 			try {
 				resultCSV.write(runID + "," +
 						term.resultLine(sessionStartTimestamp));
-				resultSQL.write(term.SQLLine(sessionStartTimestamp,transactionCount));
+				if(!isStandard){
+					resultSQL.write(term.SQLLine(sessionStartTimestamp,transactionCount));
+				}
 			} catch (IOException ie) {
 				log.error("Term-00, " + ie.getMessage());
 			}
@@ -671,11 +811,29 @@ public class jTPCC implements jTPCCConfig {
 		double vpmTotal = (6000000 * transValCount / (currTimeMillis - sessionStartTimestamp)) / 100.0;// change 11.13
 		double vpsTotal = vpmTotal/60;
 		double tpsTotal = tpmTotal/60;
+		double abortRate = (double)abortCount/transactionCount;
 		System.out.println("");
 
 
 		Collections.sort(latency_queue);
+		Collections.sort(E_H_latency_q);
+		Collections.sort(H_latency_q);
+		Collections.sort(N_latency_q);
+		Collections.sort(L_latency_q);
+
 		int queue_lenth = latency_queue.size();
+		int e_h_queue_lenth = E_H_latency_q.size();
+		int h_queue_lenth = H_latency_q.size();
+		int n_queue_lenth = N_latency_q.size();
+		int l_queue_lenth = L_latency_q.size();
+		double e_h_average = 0;
+		double h_average = 0;
+		double n_average = 0;
+		double l_average = 0;
+		e_h_average = get_average(E_H_latency_q);
+		h_average = get_average(H_latency_q);
+		n_average = get_average(N_latency_q);
+		l_average = get_average(L_latency_q);
 
 		
 
@@ -688,8 +846,10 @@ public class jTPCC implements jTPCCConfig {
 		log.info("Term-00, Measured vpsTotal = " + vpsTotal);
 		log.info("Term-00, Session Start     = " + sessionStart);
 		log.info("Term-00, Session End       = " + sessionEnd);
+		log.info("Term-00, Session Excute = "+(sessionEndTimestamp-sessionStartTimestamp)+" ms");
 		log.info("Term-00, Value Count = " + transValCount);// change 11.13
 		log.info("Term-00, Transaction Count = " + (transactionCount - 1));
+		log.info("Term-00, Transaction abort rate = " + abortRate);
 		if(queue_lenth!=0){
 			long p50 = latency_queue.get((int)(queue_lenth*0.5));
 			long p99 = latency_queue.get((int)(queue_lenth*0.99));
@@ -697,10 +857,36 @@ public class jTPCC implements jTPCCConfig {
 			log.info("Term-00, latency p50 = " + p50);
 			log.info("Term-00, latency p99 = " + p99);
 			log.info("Term-00, latency p999 = " + p999);
+		}		
+		if(e_h_queue_lenth!=0){
+			long e_h_p99 = E_H_latency_q.get((int)(e_h_queue_lenth*0.99));
+			log.info("Term-00, Extra High Priority transactions average latency = " + e_h_average);
+			log.info("Term-00, latency p99 = " + e_h_p99);
+		}
+		if(h_queue_lenth!=0){
+			long h_p99 = H_latency_q.get((int)(h_queue_lenth*0.99));
+			log.info("Term-00, High Priority transactions average latency = " + h_average);
+			log.info("Term-00, latency p99 = " + h_p99);
+		}
+		if(n_queue_lenth!=0){
+			long n_p99 = N_latency_q.get((int)(n_queue_lenth*0.99));
+			log.info("Term-00, Normal Priority transactions average latency = " + n_average);
+			log.info("Term-00, latency p99 = " + n_p99);
+		}
+		if(l_queue_lenth!=0){
+			long l_p99 = L_latency_q.get((int)(l_queue_lenth*0.99));
+			log.info("Term-00, Low Priority transactions average latency = " + l_average);
+			log.info("Term-00, latency p99 = " + l_p99);
 		}
 		for (String key : costPerWorkerload.keySet()) {
 			Long value = costPerWorkerload.get(key);
 			log.info("executeTime[" + key + "]=" + value.toString());
+		}
+
+
+		for(int i = 0;i<epochTpmTotalRecords.size();i++){
+			log.info("Term-00, epoch " + i + " Tpm = " + epochTpmTotalRecords.get(i));
+			log.info("Term-00, epoch " + i + " Vpm = " + epochVpmTotalRecords.get(i));
 		}
 	}
 
@@ -733,7 +919,26 @@ public class jTPCC implements jTPCCConfig {
 			Formatter fmt = new Formatter(informativeText);
 			double tpmC = (6000000 * fastNewOrderCounter / (currTimeMillis - sessionStartTimestamp)) / 100.0;
 			double tpmTotal = (6000000 * transactionCount / (currTimeMillis - sessionStartTimestamp)) / 100.0;
+			if(nextChangeTime != 0){
+				if(currTimeMillis>nextChangeTime){
+					epochEndTime = currTimeMillis;
+					long epochTransCount = transactionCount - lastEpochTransCount;
+					long epochValueCount = transValCount - lastEpochValue;
 
+					long deltaTime = epochEndTime-epochStartTime;
+					lastEpochTransCount = transactionCount;
+					lastEpochValue = transValCount;
+					epochStartTime = currTimeMillis;
+					double epochtpmTotal = ((6000000*epochTransCount/deltaTime)/100.0);
+					double epochvpmTotal = ((6000000*epochValueCount/deltaTime)/100.0);
+
+					nextChangeTime += changeTime*1000;
+
+					epochVpmTotalRecords.add(epochvpmTotal);
+					epochTpmTotalRecords.add(epochtpmTotal);
+				}
+
+			}
 			sessionNextTimestamp += 1000; /* update this every seconds */
 
 			fmt.format("Term-00, Running Average tpmTOTAL: %.2f", tpmTotal);
@@ -748,6 +953,7 @@ public class jTPCC implements jTPCCConfig {
 			long totalMem = Runtime.getRuntime().totalMemory() / (1024 * 1024);
 			fmt.format("    Memory Usage: %dMB / %dMB          ", (totalMem - freeMem), totalMem);
 
+			
 			System.out.print(informativeText);
 			for (int count = 0; count < 1 + informativeText.length(); count++)
 				System.out.print("\b");
@@ -784,5 +990,37 @@ public class jTPCC implements jTPCCConfig {
 			errorMessage("Term-00, could not read JsonFile");
 		}
 		return JsonLine;
+	}
+
+	public int getLimitValue(){
+		return this.limitValue;
+	}
+
+	public long getSessionStart(){
+		return this.sessionStartTimestamp;
+	}
+
+	private double get_average(Vector<Long> array){
+		int len = array.size();
+		double average = 0;
+		for(int i = 0;i<len;i++){
+			average+=array.get(i);
+		}
+		average = average/len;
+		return average;
+	}
+
+	public boolean isHotItem(int i_id){
+		return this.hot_item.containsKey(i_id);
+	}
+
+	synchronized public void updateHotItem(int i_id)throws Exception{
+		if(this.hot_item.containsKey(i_id)){
+			this.hot_item.get(i_id);
+		}
+		else{
+			this.hot_item.put(i_id, 0.0);
+			
+		}
 	}
 }

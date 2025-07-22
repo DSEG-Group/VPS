@@ -11,6 +11,7 @@ import client.jTPCCRandom;
 
 import java.sql.*;
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
 import java.io.*;
 
 public class LoadDataWorker implements Runnable {
@@ -62,6 +63,12 @@ public class LoadDataWorker implements Runnable {
 	private StringBuffer sbNewOrder = null;
 	private Formatter fmtNewOrder = null;
 	private int dbType;
+	private LoadData parent;
+	private int price_distribution;
+	public  final static int realic = 0,
+							 Uniform = 1,
+							 Gaussian = 2;
+				
 
 	// private LoadData parent;
 
@@ -73,11 +80,13 @@ public class LoadDataWorker implements Runnable {
 							DB_COCKROACH = 5;
 
 
-	LoadDataWorker(int worker, String csvNull, jTPCCRandom rnd, int dbType) {
+	LoadDataWorker(int worker, String csvNull, jTPCCRandom rnd, int dbType,int data_distribution,LoadData parent) {
 		this.worker = worker;
 		this.csvNull = csvNull;
 		this.rnd = rnd;
 		this.dbType = dbType;
+		this.price_distribution = data_distribution;
+		this.parent = parent;
 		// this.extreme_high_value_rate = extreme_high_value_rate;
 		// this.high_value_rate = high_value_rate;
 		// this.normal_value_rate = normal_value_rate;
@@ -109,12 +118,14 @@ public class LoadDataWorker implements Runnable {
 		this.fmtNewOrder = new Formatter(sbNewOrder);
 	}
 
-	LoadDataWorker(int worker, Connection dbConn, jTPCCRandom rnd,int dbtype)
+	LoadDataWorker(int worker, Connection dbConn, jTPCCRandom rnd,int dbtype,int data_distribution,LoadData parent)
 			throws SQLException {
 		this.worker = worker;
 		this.dbConn = dbConn;
 		this.rnd = rnd;
 		this.dbType = dbtype;
+		this.price_distribution = data_distribution;
+		this.parent = parent;
 
 		this.sb = new StringBuffer();
 		this.fmt = new Formatter(sb);
@@ -122,56 +133,56 @@ public class LoadDataWorker implements Runnable {
 		stmtConfig = dbConn.prepareStatement(
 				"INSERT INTO bmsql_config (\n" +
 						"  cfg_name, cfg_value) \n" +
-						"VALUES (?, ?);\n");
+						"VALUES (?, ?)\n");
 		stmtItem = dbConn.prepareStatement(
 				"INSERT INTO bmsql_item (\n" +
 						"  i_id, i_name, i_price, i_data, i_im_id) \n" +
-						"VALUES (?, ?, ?, ?, ?);\n");
+						"VALUES (?, ?, ?, ?, ?)\n");
 		stmtWarehouse = dbConn.prepareStatement(
 				"INSERT INTO bmsql_warehouse (\n" +
 						"  w_id, w_ytd, w_tax, w_name, w_street_1, w_street_2, w_city, \n" +
 						"  w_state, w_zip) \n" +
-						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);\n");
+						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\n");
 		stmtStock = dbConn.prepareStatement(
 				"INSERT INTO bmsql_stock (\n" +
 						"  s_w_id, s_i_id, s_quantity, s_ytd, s_order_cnt, s_remote_cnt, s_data, s_dist_01, s_dist_02, "
 						+
 						"  s_dist_03, s_dist_04, s_dist_05, s_dist_06, \n" +
 						"  s_dist_07, s_dist_08, s_dist_09, s_dist_10) \n" +
-						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);\n");
+						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n");
 		stmtDistrict = dbConn.prepareStatement(
 				"INSERT INTO bmsql_district (\n" +
 						"  d_w_id, d_id, d_ytd, d_tax, d_next_o_id, d_name, d_street_1, d_street_2, \n" +
 						"  d_city, d_state, d_zip) \n" +
-						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);\n");
+						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n");
 		stmtCustomer = dbConn.prepareStatement(
 				"INSERT INTO bmsql_customer (\n" +
 						"  c_w_id, c_d_id, c_id, c_discount, c_credit, c_last, c_first, c_credit_lim, \n" +
-						"  c_balance, c_ytd_payment, c_payment_cnt, c_delivery_cnt, \n" +
+						"  c_balance, c_ytd_payment, c_payment_cnt, c_delivery_cnt, c_new_order_cnt, c_order_price_cnt, \n" +
 						"  c_street_1, c_street_2, c_city, c_state, c_zip, \n" +
 						"  c_phone, c_since, c_middle, c_data) \n" +
 						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \n" +
-						"        ?, ?, ?, ?, ?, ?);\n");
+						"        ?, ?, ?, ?, ?, ?, ?, ?)\n");
 		stmtHistory = dbConn.prepareStatement(
 				"INSERT INTO bmsql_history (\n" +
 						"  hist_id, h_c_id, h_c_d_id, h_c_w_id, h_d_id, h_w_id, \n" +
 						"  h_date, h_amount, h_data) \n" +
-						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);\n");
+						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)\n");
 		stmtOrder = dbConn.prepareStatement(
 				"INSERT INTO bmsql_oorder (\n" +
 						"  o_w_id, o_d_id, o_id, o_c_id, \n" +
 						"  o_carrier_id, o_ol_cnt, o_all_local, o_entry_d) \n" +
-						"VALUES (?, ?, ?, ?, ?, ?, ?, ?);\n");
+						"VALUES (?, ?, ?, ?, ?, ?, ?, ?)\n");
 		stmtOrderLine = dbConn.prepareStatement(
 				"INSERT INTO bmsql_order_line (\n" +
 						"  ol_w_id, ol_d_id, ol_o_id, ol_number, ol_i_id, \n" +
 						"  ol_delivery_d, ol_amount, ol_supply_w_id, ol_quantity, \n" +
 						"  ol_dist_info) \n" +
-						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);\n");
+						"VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)\n");
 		stmtNewOrder = dbConn.prepareStatement(
 				"INSERT INTO bmsql_new_order (\n" +
 						"  no_w_id, no_d_id, no_o_id, no_p_flag) \n" +
-						"VALUES (?, ?, ?, ?);\n");
+						"VALUES (?, ?, ?, ?)\n");
 	}
 
 	/*
@@ -181,6 +192,7 @@ public class LoadDataWorker implements Runnable {
 		int job;
 
 		try {
+			
 			while ((job = LoadData.getNextJob()) >= 0) {
 				if (job == 0) {
 					fmt.format("Worker %03d: Loading ITEM", worker);
@@ -188,13 +200,20 @@ public class LoadDataWorker implements Runnable {
 					sb.setLength(0);
 
 					loadItem();
-					
+					LoadData.itemLoadLatch.countDown();
 
 					fmt.format("Worker %03d: Loading ITEM done", worker);
 					
 					System.out.println(sb.toString());
 					sb.setLength(0);
 				} else {
+					try {
+						// 所有线程都会等 loadItem() 完成
+						LoadData.itemLoadLatch.await();
+					} catch (InterruptedException e) {
+						Thread.currentThread().interrupt(); // 响应中断
+						break;
+					}
 					fmt.format("Worker %03d: Loading Warehouse %6d",
 							worker, job);
 					System.out.println(sb.toString());
@@ -306,29 +325,47 @@ public class LoadDataWorker implements Runnable {
 						rnd.nextInt(1, 10000));
 
 			} else {
+				
 				stmtItem.setInt(1, i_id);
 				stmtItem.setString(2, rnd.getAString(14, 24));
-				if (i_id < 100000 * this.extreme_high_value_rate / 100) {
-					stmtItem.setDouble(3, ((double) rnd.nextLong(200000, 5000000)) / 100.0);// can set the weight of the
-																							// high value item.
-				} else {
-					if (i_id > 100000 * this.extreme_high_value_rate / 100
-							&& i_id < 100000 * (this.high_value_rate + this.extreme_high_value_rate) / 100) {
-						stmtItem.setDouble(3, ((double) rnd.nextLong(20000, 80000)) / 100.0);
-					} // can set the weight of the high value item.
-					else {
-						if (i_id > 100000 * (this.high_value_rate + this.extreme_high_value_rate) / 100 && i_id < 100000
-								* (this.high_value_rate + this.extreme_high_value_rate + this.normal_value_rate)
-								/ 100) {
-							stmtItem.setDouble(3, ((double) rnd.nextLong(4000, 8000)) / 100.0);
+				double i_price = 0;
+				switch (price_distribution) {
+					case realic:
+						if (i_id < 100000 * this.extreme_high_value_rate / 100) {
+							i_price = ((double) rnd.nextLong(200000, 5000000)) / 100.0;			// high value item.
 						} else {
-							stmtItem.setDouble(3, ((double) rnd.nextLong(100, 4000)) / 100.0);
+							if (i_id > 100000 * this.extreme_high_value_rate / 100
+									&& i_id < 100000 * (this.high_value_rate + this.extreme_high_value_rate) / 100) {
+									i_price = ((double) rnd.nextLong(20000, 80000)) / 100.0;
+							} // can set the weight of the high value item.
+							else {
+								if (i_id > 100000 * (this.high_value_rate + this.extreme_high_value_rate) / 100 && i_id < 100000
+										* (this.high_value_rate + this.extreme_high_value_rate + this.normal_value_rate)
+										/ 100) {
+										i_price = ((double) rnd.nextLong(4000, 8000)) / 100.0;
+								} else {
+									i_price = ((double) rnd.nextLong(100, 4000)) / 100.0;
+								}
+							}	
 						}
-					}
+						break;
+					case Uniform:
+						i_price = ((double) rnd.nextLong(1000, 50000)) / 100.0;
+						break;
+					case Gaussian:
+						i_price = (rnd.generateGaussianInRange(245,1,10,500) );
+						break;
+					default:
+						break;
 				}
+				
 
+					
+				stmtItem.setDouble(3, i_price);
 				stmtItem.setString(4, iData);
 				stmtItem.setInt(5, rnd.nextInt(1, 10000));
+				parent.item_list.put(i_id,i_price);
+
 				
 				// SQLString += stmtItem.toString()+";\n";
 				// LoadData.SQLAppend(SQLString);
@@ -592,15 +629,17 @@ public class LoadDataWorker implements Runnable {
 					stmtCustomer.setDouble(10, 10.00);
 					stmtCustomer.setInt(11, 1);
 					stmtCustomer.setInt(12, 1);
-					stmtCustomer.setString(13, rnd.getAString(10, 20));
-					stmtCustomer.setString(14, rnd.getAString(10, 20));
+					stmtCustomer.setInt(13, 0);
+					stmtCustomer.setInt(14, 0);
 					stmtCustomer.setString(15, rnd.getAString(10, 20));
-					stmtCustomer.setString(16, rnd.getState());
-					stmtCustomer.setString(17, rnd.getNString(4, 4) + "11111");
-					stmtCustomer.setString(18, rnd.getNString(16, 16));
-					stmtCustomer.setTimestamp(19, new Timestamp(System.currentTimeMillis()));
-					stmtCustomer.setString(20, "OE");
-					stmtCustomer.setString(21, rnd.getAString(300, 500));
+					stmtCustomer.setString(16, rnd.getAString(10, 20));
+					stmtCustomer.setString(17, rnd.getAString(10, 20));
+					stmtCustomer.setString(18, rnd.getState());
+					stmtCustomer.setString(19, rnd.getNString(4, 4) + "11111");
+					stmtCustomer.setString(20, rnd.getNString(16, 16));
+					stmtCustomer.setTimestamp(21, new Timestamp(System.currentTimeMillis()));
+					stmtCustomer.setString(22, "OE");
+					stmtCustomer.setString(23, rnd.getAString(300, 500));
 
 					// SQLString += stmtCustomer.toString()+";\n";
 		
@@ -751,15 +790,13 @@ public class LoadDataWorker implements Runnable {
 						stmtOrderLine.setInt(2, d_id);
 						stmtOrderLine.setInt(3, o_id);
 						stmtOrderLine.setInt(4, ol_number);
-						stmtOrderLine.setInt(5, rnd.nextInt(1, 100000));
+						int i_id = rnd.nextInt(1, 100000);
+						stmtOrderLine.setInt(5, i_id);
 						if (o_id < 2101)
 							stmtOrderLine.setTimestamp(6, new Timestamp(now));
 						else
 							stmtOrderLine.setNull(6, Types.TIMESTAMP);
-						if (o_id < 2101)
-							stmtOrderLine.setDouble(7, 0.00);
-						else
-							stmtOrderLine.setDouble(7, ((double) rnd.nextLong(1, 999999)) / 100.0);
+						stmtOrderLine.setDouble(7, parent.item_list.get(i_id)*5);
 						stmtOrderLine.setInt(8, w_id);
 						stmtOrderLine.setInt(9, 5);
 						stmtOrderLine.setString(10, rnd.getAString(24, 24));

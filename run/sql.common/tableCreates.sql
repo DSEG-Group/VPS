@@ -42,6 +42,8 @@ create table bmsql_customer (
   c_ytd_payment  decimal(12,2),
   c_payment_cnt  integer,
   c_delivery_cnt integer,
+  c_new_order_cnt integer,
+  c_order_price_cnt decimal(10,2),
   c_street_1     varchar(20),
   c_street_2     varchar(20),
   c_city         varchar(20),

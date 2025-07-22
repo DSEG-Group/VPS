@@ -31,11 +31,14 @@ bin/
 run/*result*
 run/logs
 doc/
-build.xml
 README
 README.md
-untitled.iml
 HOW-TO-RUN.txt
 run/*timeoutAbort
 run/*timeoutValloss
 run/*notimeout
+!JDK8/bin
+run/standard_data/*.sql
+run/standard_data/*.json
+*.png
+src/NLP/model/*.pt

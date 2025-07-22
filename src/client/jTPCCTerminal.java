@@ -7,6 +7,7 @@ package client;/*
  *
  */
 import org.apache.log4j.*;
+import org.firebirdsql.jdbc.parser.JaybirdSqlParser.deleteStatement_return;
 
 import java.io.*;
 import java.sql.*;
@@ -26,9 +27,12 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
     private ResultSet rs = null;
     private int terminalWarehouseID, terminalDistrictID;
     private boolean terminalWarehouseFixed;
-    private int paymentWeight, orderStatusWeight, deliveryWeight, stockLevelWeight, limPerMin_Terminal;
-    private jTPCC parent;
+    private int[] paymentWeight, orderStatusWeight, deliveryWeight, stockLevelWeight;
+	private int limPerMin_Terminal;
+    public  jTPCC parent;
     private jTPCCRandom rnd;
+	private long changeTime;
+	private int next_transaction_type = TT_RANDOM;
 
 	private double transVal;//change 11.13
 	private int is_abort;
@@ -39,12 +43,21 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
     private long totalTnxs = 1;
     private StringBuffer query = null;
     private int result = 0;
-    private boolean stopRunningSignal = false;
+    private volatile boolean stopRunningSignal = false;
 	private Vector<Long> latency_queue = new Vector<>();
+	private boolean isReadJson;
 
 	private Vector<String> Querylist;
+	private boolean isHeap = true;
 
 	private boolean standardSQL;
+	private Vector<Long>E_H_latency_q = new Vector<>();
+	private Vector<Long>H_latency_q = new Vector<>();
+	private Vector<Long>N_latency_q = new Vector<>();
+	private Vector<Long>L_latency_q = new Vector<>();
+	private int epoch = 0;
+
+	private Map<Integer,Double> reStock_item = new HashMap<>();
 
     long terminalStartTime = 0;
     long transactionEnd = 0;
@@ -52,12 +65,31 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
     jTPCCConnection db = null;
     int                 dbType = 0;
 
+	public final static int HEAP_MAX_SIZE = 10000;
+	public final static int TT_NEW_ORDER = 0,
+	TT_PAYMENT = 1,
+	TT_ORDER_STATUS = 2,
+	TT_STOCK_LEVEL = 3,
+	TT_DELIVERY = 4,
+	TT_DELIVERY_BG = 5,
+	TT_NONE = 6,
+	TT_DONE = 7,
+	TT_RANDOM = 8,
+	TT_TRIGER_RESTOCK = 9;
+
+	public final static int
+	EX_HIGH_PRIO = 3, 
+	HIGH_PRIO = 2,
+	NORMAL_PRIO = 1,
+	LOW_PRIO = 0;
+	public boolean value_loss;
+
     public jTPCCTerminal
       (String terminalName, int terminalWarehouseID, int terminalDistrictID,
        Connection conn, int dbType,
        int numTransactions, boolean terminalWarehouseFixed,
-       int paymentWeight, int orderStatusWeight,
-       int deliveryWeight, int stockLevelWeight, int numWarehouses, int limPerMin_Terminal, jTPCC parent, boolean standardSQL) throws SQLException
+       int[] paymentWeight, int[] orderStatusWeight,
+       int[] deliveryWeight, int[] stockLevelWeight, int numWarehouses, int limPerMin_Terminal, jTPCC parent, boolean standardSQL,boolean isHeap,boolean isReadJson,long changeTime,boolean value_loss) throws SQLException
     {
 	this.terminalName = terminalName;
 	this.conn = conn;
@@ -84,6 +116,10 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 	this.limPerMin_Terminal = limPerMin_Terminal;
 
 	this.standardSQL = standardSQL;
+	this.isReadJson = isReadJson;
+	this.isHeap = isHeap;
+	this.changeTime = changeTime;
+	this.value_loss = value_loss;
 
 	this.db = new jTPCCConnection(conn, dbType);
 
@@ -94,11 +130,20 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 
     public void run()
     {
-	if(!standardSQL){
-		executeTransactions(numTransactions);
+	if(!isReadJson){
+		if(!standardSQL){
+			if(isHeap){
+				executeHeapSQL();
+			}else{
+				executeTransactions(numTransactions);
+			}
+		}
+		else{
+				executeStandardTransactions();
+		}
 	}
 	else{
-		executeStandardTransactions();
+		HeapReadJson();
 	}
 
 
@@ -120,7 +165,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 	printMessage("");
 	printMessage("Terminal \'" + terminalName + "\' finished after " + (transactionCount-1) + " transaction(s).");
 
-	parent.signalTerminalEnded(this, newOrderCounter,latency_queue);
+	parent.signalTerminalEnded(this, newOrderCounter,latency_queue,E_H_latency_q,H_latency_q,N_latency_q,L_latency_q);
     }
 
     public void stopRunningWhenPossible()
@@ -142,8 +187,16 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 
 	for(int i = 0; (i < numTransactions || numTransactions == -1) && !stopRunning; i++)
 	{
+		long now_timestamp = System.currentTimeMillis();
+		long deltaTime = now_timestamp-terminalStartTime;
+		if(changeTime <= 0){
+			epoch = 0;
+		}
+		else{
+			epoch = ((int)deltaTime/(int)(changeTime*1000))%2;
+		}
 
-	    long transactionType = rnd.nextLong(1, 100);
+	    long transactionType;
 	    int skippedDeliveries = 0, newOrder = 0;
 	    String transactionTypeName;
 
@@ -160,13 +213,71 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 	     * significant traffic, changing the overall database
 	     * access pattern significantly.
 	     */
-	    // if(!terminalWarehouseFixed)
+	    if(!terminalWarehouseFixed)
 		terminalWarehouseID = rnd.nextInt(1, numWarehouses);
-		terminalDistrictID = rnd.nextInt(1, 10);
+		// terminalDistrictID = rnd.nextInt(1, 10);
+
+		if(next_transaction_type == TT_RANDOM){
+			transactionType = rnd.nextLong(1, 100);
+		}
+		else{
+			switch (next_transaction_type) {
+				case TT_PAYMENT:
+					transactionType = paymentWeight[epoch];
+					break;
+				case TT_STOCK_LEVEL:
+					transactionType = paymentWeight[epoch] + stockLevelWeight[epoch];
+					break;
+				case TT_ORDER_STATUS:
+					transactionType = paymentWeight[epoch] + stockLevelWeight[epoch] + orderStatusWeight[epoch];
+					break;
+				case TT_DELIVERY:
+					transactionType = paymentWeight[epoch] + stockLevelWeight[epoch] + orderStatusWeight[epoch] + deliveryWeight[epoch];
+					break;
+				case TT_NEW_ORDER:
+					transactionType = 100;
+					break;
+				case TT_TRIGER_RESTOCK:
+					transactionType = -1;
+					break;
+				default:
+					transactionType = rnd.nextLong(1, 100);
+					break;
+			}
+		}
 		
-	    if(transactionType <= paymentWeight)
+		if(transactionType == -1){
+			jTPCCTData      term = new jTPCCTData(this);
+			term.setNumWarehouses(numWarehouses);
+			term.setWarehouse(terminalWarehouseID);
+			term.setDistrict(terminalDistrictID);
+			try
+			{
+				term.generateStockLevel(log, rnd, 0,reStock_item);
+				term.traceScreen(log);
+				term.execute(log, db, rnd);
+				transVal = term.getTransVal_real();
+				is_abort = term.get_abort();
+				latency_queue.add(term.get_latency());
+				parent.resultAppend(term,false);
+				term.traceScreen(log);
+				reStock_item.clear();
+			}
+			catch (CommitException e)
+			{
+				continue;
+			}
+			catch (Exception e)
+			{
+				log.fatal(e.getMessage());
+				e.printStackTrace();
+				System.exit(4);
+			}
+			transactionTypeName = "Triger_Restrock";
+		}
+	    else if(transactionType <= paymentWeight[epoch]&&this.newOrderCounter>0)
 	    {
-		jTPCCTData      term = new jTPCCTData();
+		jTPCCTData      term = new jTPCCTData(this);
 		term.setNumWarehouses(numWarehouses);
 		term.setWarehouse(terminalWarehouseID);
 		term.setDistrict(terminalDistrictID);
@@ -178,7 +289,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 			transVal = term.getTransVal_real();
 			is_abort = term.get_abort();
 			latency_queue.add(term.get_latency());
-		    parent.resultAppend(term);
+		    parent.resultAppend(term,false);
 		    term.traceScreen(log);
 			
 		}
@@ -194,21 +305,24 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		}
 		transactionTypeName = "Payment";
 	    }
-	    else if(transactionType <= paymentWeight + stockLevelWeight)
+		else if(transactionType <= paymentWeight[epoch]&&this.newOrderCounter<=0){
+			continue;
+		}
+	    else if(transactionType <= paymentWeight[epoch] + stockLevelWeight[epoch])
 	    {
-		jTPCCTData      term = new jTPCCTData();
+		jTPCCTData      term = new jTPCCTData(this);
 		term.setNumWarehouses(numWarehouses);
 		term.setWarehouse(terminalWarehouseID);
 		term.setDistrict(terminalDistrictID);
 		try
 		{
-		    term.generateStockLevel(log, rnd, 0);
+		    term.generateStockLevel(log, rnd, 0,reStock_item);
 		    term.traceScreen(log);
 		    term.execute(log, db, rnd);
 			transVal = term.getTransVal_real();
 			is_abort = term.get_abort();
 			latency_queue.add(term.get_latency());
-		    parent.resultAppend(term);
+		    parent.resultAppend(term,false);
 		    term.traceScreen(log);
 		}
 		catch (CommitException e)
@@ -223,9 +337,9 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		}
 		transactionTypeName = "Stock-Level";
 	    }
-	    else if(transactionType <= paymentWeight + stockLevelWeight + orderStatusWeight)
+	    else if(transactionType <= paymentWeight[epoch] + stockLevelWeight[epoch] + orderStatusWeight[epoch])
 	    {
-		jTPCCTData      term = new jTPCCTData();
+		jTPCCTData      term = new jTPCCTData(this);
 		term.setNumWarehouses(numWarehouses);
 		term.setWarehouse(terminalWarehouseID);
 		term.setDistrict(terminalDistrictID);
@@ -237,7 +351,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 			transVal = term.getTransVal_real();
 			is_abort = term.get_abort();
 			latency_queue.add(term.get_latency());
-		    parent.resultAppend(term);
+		    parent.resultAppend(term,false);
 		    term.traceScreen(log);
 		}
 		catch (CommitException e)
@@ -252,9 +366,9 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		}
 		transactionTypeName = "Order-Status";
 	    }
-	    else if(transactionType <= paymentWeight + stockLevelWeight + orderStatusWeight + deliveryWeight)
+	    else if(transactionType <= paymentWeight[epoch] + stockLevelWeight[epoch] + orderStatusWeight[epoch] + deliveryWeight[epoch])
 	    {
-		jTPCCTData      term = new jTPCCTData();
+		jTPCCTData      term = new jTPCCTData(this);
 		term.setNumWarehouses(numWarehouses);
 		term.setWarehouse(terminalWarehouseID);
 		term.setDistrict(terminalDistrictID);
@@ -266,7 +380,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 			transVal = term.getTransVal_real();
 			is_abort = term.get_abort();
 			latency_queue.add(term.get_latency());
-		    parent.resultAppend(term);
+		    parent.resultAppend(term,false);
 		    term.traceScreen(log);
 
 		    /*
@@ -277,7 +391,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		    jTPCCTData  bg = term.getDeliveryBG();
 		    bg.traceScreen(log);
 		    bg.execute(log, db, rnd);
-		    parent.resultAppend(bg);
+		    parent.resultAppend(bg,false);
 		    bg.traceScreen(log);
 
 		    skippedDeliveries = bg.getSkippedDeliveries();
@@ -296,7 +410,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 	    }
 	    else
 	    {
-		jTPCCTData      term = new jTPCCTData();
+		jTPCCTData      term = new jTPCCTData(this);
 		term.setNumWarehouses(numWarehouses);
 		term.setWarehouse(terminalWarehouseID);
 		term.setDistrict(terminalDistrictID);
@@ -308,7 +422,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 			transVal = term.getTransVal_real();
 			is_abort = term.get_abort();
 			latency_queue.add(term.get_latency());
-		    parent.resultAppend(term);
+		    parent.resultAppend(term,false);
 		    term.traceScreen(log);
 		}
 		catch (CommitException e)
@@ -393,6 +507,22 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		return latency_queue;
 	}
 
+	public Vector<Long> get_e_h_latencyQueue(){
+		return E_H_latency_q;
+	}
+
+	public Vector<Long> get_h_latencyQueue(){
+		return H_latency_q;
+	}
+
+	public Vector<Long> get_n_latencyQueue(){
+		return N_latency_q;
+	}
+
+	public Vector<Long> get_l_latencyQueue(){
+		return L_latency_q;
+	}
+
 
 
     void transCommit() {
@@ -422,16 +552,37 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 	private void executeStandardTransactions(){
 		String SQLString = parent.readJsonLine();
 		boolean stopRunning = false;
+		int priority;
 		while(SQLString != ""&&!stopRunning){
 			
 			try{
 				long transactionStart = System.currentTimeMillis();
-				jTPCCTData  term = new jTPCCTData(); 
-				term.executeStandardQuery(log, SQLString, db);
+				jTPCCTData  term = new jTPCCTData(this); 
+				term.executeStandardQuery(log, SQLString, parent.getSessionStart(), db);
 				transVal = term.getTransVal_real();
 				term.traceScreen(log);
 				long transactionEnd = System.currentTimeMillis();
 				String typename = term.getTransType();
+				priority = term.get_priority();
+				latency_queue.add(term.get_transEndTime() - term.get_transGenerateTime());
+				switch(priority){
+					case EX_HIGH_PRIO:
+						E_H_latency_q.add(term.get_transEndTime() - term.get_transGenerateTime());
+						break;
+					case HIGH_PRIO:
+						H_latency_q.add(term.get_transEndTime() - term.get_transGenerateTime());
+						break;
+					case NORMAL_PRIO:
+						N_latency_q.add(term.get_transEndTime() - term.get_transGenerateTime());
+						if(term.get_transEndTime() - term.get_transGenerateTime()<0){
+							System.out.println("error");
+						}
+						break;
+					case LOW_PRIO:
+						L_latency_q.add(term.get_transEndTime() - term.get_transGenerateTime());
+						break;
+				}
+				parent.resultAppend(term,true);
 				int neworder = 0;
 				if(typename.equals("New-Order")){
 					neworder = 1;
@@ -452,5 +603,143 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 			SQLString = parent.readJsonLine();
 		}
 	}
+	
+	private void HeapReadJson(){
+		String SQLString = parent.readJsonLine();
+		boolean stopRunning = false;
+		while(SQLString != ""&&!stopRunning){
+			int Current_size = parent.Tree.getSize();
+			if(Current_size>=HEAP_MAX_SIZE){// busy wait
+				if(stopRunningSignal) {
+					stopRunning = true;
+					// break;
+				}
+				// try{
+				// 	Thread.sleep(1);
+				// }
+				// catch(InterruptedException ie){
+				// 	ie.printStackTrace();
+				// }
+				continue;
+				
+			}
+			int head = SQLString.indexOf(":")+1;
+			int tail = SQLString.length()-1;
+			SQLString  = SQLString.substring(head, tail);
+			JSONObject SQLJson = new JSONObject(SQLString);
+			String ValueString = SQLJson.getString("value");
+			String QueryString = SQLJson.getString("sql");
+			String type = SQLJson.getString("transType");
+			String arriveTime = SQLJson.getString("generateTime");
+			String PriorityString = SQLJson.getString("priority");
+			long generateTime = Long.parseLong(arriveTime);
+			int transType;
+			int priority = Integer.parseInt(PriorityString);
+			double transVal = Double.parseDouble(ValueString);
+			if(type.equals("New-Order")){
+				transType = TT_NEW_ORDER;
+			}
+			else if(type.equals("Payment")){
+				transType = TT_PAYMENT;
+			}
+			else if(type.equals("Stock-Level")){
+				transType = TT_STOCK_LEVEL;
+			}
+			else if(type.equals("Order-Status")){
+				transType = TT_ORDER_STATUS;
+			}
+			else{
+				transType = TT_DELIVERY;
+			}
+			long CurrentTime = System.currentTimeMillis();
+			long timeDelta = CurrentTime - parent.getSessionStart();
+			while(timeDelta < generateTime){
+				CurrentTime = System.currentTimeMillis();
+				timeDelta = CurrentTime - parent.getSessionStart();
+			}//busy wait
+			TreeNode node = new TreeNode(QueryString, transType, transVal,generateTime,priority);
+			parent.Tree.add(node);
+			SQLString = parent.readJsonLine();
+			// try{
+			// 	Thread.sleep(10);
+			// }
+			// catch(InterruptedException ie){
+			// 	ie.printStackTrace();
+			// }
+			if(stopRunningSignal) {
+				stopRunning = true;
+				// break;
+			}
+		}
+		parent.Tree.setIsAllLoad(true);
+	}
 
+
+	private void executeHeapSQL(){
+		try{
+			String sqlString;
+			double transVal;
+			int transType;
+			boolean stopRunning = false;
+			long generateTime;
+			int priority;
+			while(true&&!stopRunning){
+				if(parent.Tree.getIsAllLoad()&&parent.Tree.getSize() == 0){
+					break;
+				}
+				TreeNode node = parent.Tree.pop();
+				if(node == null){
+					Thread.sleep(1);
+					continue;
+				}
+				else{
+					sqlString = node.getSQL();
+					transVal = node.getTransVal();
+					transType = node.getTransType();
+					generateTime = node.getGenerateTime();
+					priority = node.getPriority();
+					jTPCCTData term = new jTPCCTData(this);
+					long transactionStart = System.currentTimeMillis();
+					term.executeStandardQuery_Heap(log, sqlString,transType,transVal,generateTime,parent.getSessionStart(),priority,db);
+					transVal = term.getTransVal_real();
+					is_abort = term.get_abort();
+					term.traceScreen(log);
+					latency_queue.add(term.get_transEndTime() - (parent.getSessionStart()+generateTime));
+					long transactionEnd = System.currentTimeMillis();
+					String typename = term.getTransType();
+					parent.resultAppend(term,true);
+					int neworder = 0;
+					if(typename.equals("New-Order")){
+						neworder = 1;
+					}
+					switch(priority){
+						case EX_HIGH_PRIO:
+							E_H_latency_q.add(term.get_transEndTime() - (parent.getSessionStart()+generateTime));
+							break;
+						case HIGH_PRIO:
+							H_latency_q.add(term.get_transEndTime() - (parent.getSessionStart()+generateTime));
+							break;
+						case NORMAL_PRIO:
+							N_latency_q.add(term.get_transEndTime() - (parent.getSessionStart()+generateTime));
+							break;
+						case LOW_PRIO:
+							L_latency_q.add(term.get_transEndTime() - (parent.getSessionStart()+generateTime));
+							break;
+					}
+					parent.signalTerminalEndedTransaction(this.terminalName, typename, transactionEnd - transactionStart, null, neworder,transVal,is_abort);
+					if(stopRunningSignal) stopRunning = true;
+				
+				}
+
+
+			}
+		}catch(Exception e){
+			e.printStackTrace();
+		}
+	}
+
+	public void set_next_txn_type(int type,Map<Integer,Double>reStock_item){
+		this.next_transaction_type = type;
+		this.reStock_item = reStock_item;
+	}
 }

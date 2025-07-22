@@ -53,6 +53,8 @@ create table bmsql_customer (
   c_since        timestamp,
   c_middle       char(2),
   c_data         varchar(500),
+  c_new_order_cnt integer,
+  c_order_price_cnt decimal(10,2),
   constraint pk_customer primary key (c_w_id, c_d_id, c_id),
   key bmsql_customer_idx1 (c_w_id, c_d_id, c_last, c_first)
 );

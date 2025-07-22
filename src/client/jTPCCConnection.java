@@ -28,6 +28,7 @@ public class jTPCCConnection
     public PreparedStatement    stmtNewOrderSelectItemBatch[];
     public PreparedStatement    stmtNewOrderUpdateStock;
     public PreparedStatement    stmtNewOrderInsertOrderLine;
+	public PreparedStatement 	stmtNewOrderSelectCustomer;
 	public PreparedStatement    stmtNewOrderUpdateCustomer;
 
     public PreparedStatement    stmtPaymentSelectWarehouse;
@@ -52,6 +53,9 @@ public class jTPCCConnection
     public PreparedStatement    stmtOrderStatusSelectOrderLine;
 
     public PreparedStatement    stmtStockLevelSelectLow;
+	public PreparedStatement 	stmtStockLevelUpateStock;
+	public PreparedStatement    stmtStockLevelSelectOrder;
+	public PreparedStatement	stmtStockLevelSelectStockDetail;
 
 	public PreparedStatement    stmtDeliveryBGSelectOldestNewOrder;
     public PreparedStatement    stmtDeliveryBGDeleteOldestNewOrder;
@@ -61,9 +65,13 @@ public class jTPCCConnection
     public PreparedStatement    stmtDeliveryBGUpdateOrderLine;
     public PreparedStatement    stmtDeliveryBGUpdateCustomer;
 
+	// public PreparedStatement	stmtTrigerRestockBatch[];
+
 	public PreparedStatement	stmtSetPriorityHigh;
 	public PreparedStatement	stmtSetPriorityLow;
 	public PreparedStatement	stmtSetPriorityNormal;
+	
+
 
 	public PreparedStatement 	stmtStandardQuery;
 
@@ -77,8 +85,20 @@ public class jTPCCConnection
 	stmtSetPriorityLow = dbConn.prepareStatement("SET TRANSACTION PRIORITY LOW");
 	stmtSetPriorityNormal = dbConn.prepareStatement("SET TRANSACTION PRIORITY NORMAL");
 
+	// stmtTrigerRestockBatch = new PreparedStatement[16];
 
+	// String st = 
+	// "UPDATE bmsql_stock \n" + 
+	// "	SET s_quantity = s_quantity + 100 \n" +
+	// "	WHERE (s_w_id, s_i_id) in ((?,?)";
+	// for(int i = 1; i <= 15; i++){
+	// 	String stmtStr = st + ")";
+	// 	stmtTrigerRestockBatch[i] = dbConn.prepareStatement(stmtStr);
+	// 	st += ",(?,?)";
+	// }
+	
 	stmtNewOrderSelectStockBatch = new PreparedStatement[16];
+
 	String st = "SELECT s_i_id, s_w_id, s_quantity, s_data, \n" +
 				"       s_dist_01, s_dist_02, s_dist_03, s_dist_04, \n" +
 				"       s_dist_05, s_dist_06, s_dist_07, s_dist_08, \n" +
@@ -147,9 +167,15 @@ public class jTPCCConnection
 		"    ol_i_id, ol_supply_w_id, ol_quantity, \n" +
 		"    ol_amount, ol_dist_info) \n" +
 		"    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)");
+	stmtNewOrderSelectCustomer = dbConn.prepareStatement(
+		"SELECT c_order_price_cnt \n"+
+		"	FROM bmsql_customer \n"+
+		"	WHERE c_w_id = ? AND c_d_id = ? AND c_id = ? \n"+
+		"	FOR UPDATE"
+	);
 	stmtNewOrderUpdateCustomer = dbConn.prepareStatement(
 		"UPDATE bmsql_customer \n" +
-		"    SET c_balance = c_balance + ? \n" +
+		"    SET c_balance = c_balance + ? , c_new_order_cnt = c_new_order_cnt + 1, c_order_price_cnt = ?\n" +
 		"    WHERE c_w_id = ? AND c_d_id = ? AND c_id = ?");
 
 	// PreparedStatements for PAYMENT
@@ -260,39 +286,90 @@ public class jTPCCConnection
 		case jTPCCConfig.DB_COCKROACH:
 	    case jTPCCConfig.DB_POSTGRES:
 	    case jTPCCConfig.DB_MYSQL:
+		// stmtStockLevelSelectLow = dbConn.prepareStatement(
+		//     "SELECT count(*) AS low_stock FROM (\n" +
+		//     "    SELECT s_w_id, s_i_id, s_quantity \n" +
+		//     "        FROM bmsql_stock \n" +
+		//     "        WHERE s_w_id = ? AND s_quantity < ? AND s_i_id IN (\n" +
+		//     "            SELECT /*+ TIDB_INLJ(bmsql_order_line) */ ol_i_id \n" +
+		//     "                FROM bmsql_district \n" +
+		//     "                JOIN bmsql_order_line ON ol_w_id = d_w_id \n" +
+		//     "                 AND ol_d_id = d_id \n" +
+		//     "                 AND ol_o_id >= d_next_o_id - 20 \n" +
+		//     "                 AND ol_o_id < d_next_o_id \n" +
+		//     "                WHERE d_w_id = ? AND d_id = ? \n" +
+		//     "        ) \n" +
+		//     "    ) AS L");
+
 		stmtStockLevelSelectLow = dbConn.prepareStatement(
-		    "SELECT count(*) AS low_stock FROM (\n" +
-		    "    SELECT s_w_id, s_i_id, s_quantity \n" +
-		    "        FROM bmsql_stock \n" +
-		    "        WHERE s_w_id = ? AND s_quantity < ? AND s_i_id IN (\n" +
-		    "            SELECT /*+ TIDB_INLJ(bmsql_order_line) */ ol_i_id \n" +
-		    "                FROM bmsql_district \n" +
-		    "                JOIN bmsql_order_line ON ol_w_id = d_w_id \n" +
-		    "                 AND ol_d_id = d_id \n" +
-		    "                 AND ol_o_id >= d_next_o_id - 20 \n" +
-		    "                 AND ol_o_id < d_next_o_id \n" +
-		    "                WHERE d_w_id = ? AND d_id = ? \n" +
-		    "        ) \n" +
-		    "    ) AS L");
+			"    SELECT s_w_id, s_i_id, s_quantity \n" +
+			"        FROM bmsql_stock \n" +
+			"        WHERE s_w_id = ? AND s_quantity < ? AND s_i_id IN (\n" +
+			"            SELECT /*+ TIDB_INLJ(bmsql_order_line) */ ol_i_id \n" +
+			"                FROM bmsql_district \n" +
+			"                JOIN bmsql_order_line ON ol_w_id = d_w_id \n" +
+			"                 AND ol_d_id = d_id \n" +
+			"                 AND ol_o_id >= d_next_o_id - 20 \n" +
+			"                 AND ol_o_id < d_next_o_id \n" +
+			"                WHERE d_w_id = ? AND d_id = ? \n" +
+			"        ) \n");
+		
+		stmtStockLevelSelectOrder = dbConn.prepareStatement(
+			"SELECT d_next_o_id \n"+
+			"	FROM bmsql_district \n"+
+			"	WHERE d_w_id = ? AND d_id = ?\n"
+		);
+
+		stmtStockLevelSelectStockDetail = dbConn.prepareStatement(
+			"SELECT DISTINCT s_w_id, s_i_id, ol_amount, ol_quantity \n"+
+			"	FROM bmsql_order_line, bmsql_stock \n"+
+			"	WHERE ol_w_id = ? AND ol_d_id = ? AND ol_o_id >= ? - 20 \n"+
+			"	AND s_i_id = ol_i_id AND s_quantity < 16\n" 
+		);
 		break;
 
+		
+
 	    default:
+		// stmtStockLevelSelectLow = dbConn.prepareStatement(
+		//     "SELECT count(*) AS low_stock FROM (\n" +
+		//     "    SELECT s_w_id, s_i_id, s_quantity \n" +
+		//     "        FROM bmsql_stock \n" +
+		//     "        WHERE s_w_id = ? AND s_quantity < ? AND s_i_id IN (\n" +
+		//     "            SELECT ol_i_id \n" +
+		//     "                FROM bmsql_district \n" +
+		//     "                JOIN bmsql_order_line ON ol_w_id = d_w_id \n" +
+		//     "                 AND ol_d_id = d_id \n" +
+		//     "                 AND ol_o_id >= d_next_o_id - 20 \n" +
+		//     "                 AND ol_o_id < d_next_o_id \n" +
+		//     "                WHERE d_w_id = ? AND d_id = ? \n" +
+		//     "        ) \n" +
+		//     "    )");
+
 		stmtStockLevelSelectLow = dbConn.prepareStatement(
-		    "SELECT count(*) AS low_stock FROM (\n" +
-		    "    SELECT s_w_id, s_i_id, s_quantity \n" +
-		    "        FROM bmsql_stock \n" +
-		    "        WHERE s_w_id = ? AND s_quantity < ? AND s_i_id IN (\n" +
-		    "            SELECT ol_i_id \n" +
-		    "                FROM bmsql_district \n" +
-		    "                JOIN bmsql_order_line ON ol_w_id = d_w_id \n" +
-		    "                 AND ol_d_id = d_id \n" +
-		    "                 AND ol_o_id >= d_next_o_id - 20 \n" +
-		    "                 AND ol_o_id < d_next_o_id \n" +
-		    "                WHERE d_w_id = ? AND d_id = ? \n" +
-		    "        ) \n" +
-		    "    )");
+			"SELECT count(*) AS low_stock FROM (\n" +
+			"    SELECT s_w_id, s_i_id, s_quantity \n" +
+			"        FROM bmsql_stock \n" +
+			"        WHERE s_w_id = ? AND s_quantity < ? AND s_i_id IN (\n" +
+			"            SELECT ol_i_id \n" +
+			"                FROM bmsql_district \n" +
+			"                JOIN bmsql_order_line ON ol_w_id = d_w_id \n" +
+			"                 AND ol_d_id = d_id \n" +
+			"                 AND ol_o_id >= d_next_o_id - 20 \n" +
+			"                 AND ol_o_id < d_next_o_id \n" +
+			"                WHERE d_w_id = ? AND d_id = ? \n" +
+			"        ) \n" +
+			"    )");
 		break;
+
+				
 	}
+
+	stmtStockLevelUpateStock = dbConn.prepareStatement(
+		"UPDATE bmsql_stock \n" + 
+		"	SET s_quantity = s_quantity + 100 \n" +
+		"	WHERE s_w_id = ? AND s_i_id = ?"
+	);
 
 
 		// PreparedStatements for DELIVERY_BG
@@ -343,7 +420,10 @@ public class jTPCCConnection
 		"UPDATE bmsql_customer \n" +
 		"    SET c_delivery_cnt = c_delivery_cnt + 1 \n" +
 		"    WHERE c_w_id = ? AND c_d_id = ? AND c_id = ?");
-    }
+    
+	}
+
+
 
     public jTPCCConnection(String connURL, Properties connProps, int dbType)
 	throws SQLException

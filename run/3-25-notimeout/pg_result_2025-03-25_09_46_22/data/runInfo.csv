@@ -1,2 +1,0 @@
-run,driver,driverVersion,db,sessionStart,runMins,loadWarehouses,runWarehouses,numSUTThreads,limitTxnsPerMin,thinkTimeMultiplier,keyingTimeMultiplier
-495,simple,5.0,postgres,2025-03-25 09:46:24.488,0,32,32,512,0,1.0,1.0

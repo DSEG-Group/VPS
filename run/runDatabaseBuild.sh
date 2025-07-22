@@ -14,6 +14,7 @@ fi
 DB="$(grep '^db=' $PROPS | sed -e 's/^db=//')"
 
 BEFORE_LOAD="tableCreates"
+
 AFTER_LOAD="indexCreates foreignKeys extraHistID buildFinish"
 
 for step in ${BEFORE_LOAD} ; do
@@ -27,3 +28,11 @@ done
 for step in ${AFTER_LOAD} ; do
     ./runSQL.sh "${PROPS}" $step
 done
+
+# 导出整个数据库
+# if [ "$DB" = "postgres" ] ; then
+#     pg_dump postgresql://lyb:123456@localhost:5432/postgres -F p > ./standard_data/standardDatabase_pg.sql
+# fi
+# if [ "$DB" = "mysql" ] ; then
+#     mysqldump -u root -p123456 tpcc > ./standard_data/standardDatabase_mysql.sql
+# fi

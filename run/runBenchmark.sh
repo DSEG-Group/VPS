@@ -10,9 +10,9 @@ FILES=(
 )
 
 for file in "${FILES[@]}"; do
-    for i in 1; do
+    # for i in 100; do
 
-        sed -i "s#^terminals=.*#terminals=${i}#g" "$file"
+        # sed -i "s#^terminals=.*#terminals=${i}#g" "$file"
 
         set -- "$file"
 
@@ -35,6 +35,6 @@ for file in "${FILES[@]}"; do
         myOPTS="-Dprop=$1 -DrunID=${SEQ}"
 
         java -cp "$myCP" $myOPTS client.jTPCC
-    done
+    # done
 
 done

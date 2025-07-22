@@ -11,6 +11,7 @@ import client.jTPCCRandom;
 
 import java.sql.*;
 import java.util.*;
+import java.util.concurrent.CountDownLatch;
 import java.io.*;
 import java.lang.Integer;
 
@@ -26,6 +27,7 @@ public class LoadData
 	private static String       resultSQLName = null;
 	private static String 		iDB = null;
 	private static int 		    dbtype;
+	private static int 	   		data_distribution;		
 
 
     private static int          numWarehouses;
@@ -50,6 +52,7 @@ public class LoadData
     private static BufferedWriter       orderLineCSV = null;
     private static BufferedWriter       newOrderCSV = null;
 	private static BufferedWriter 		resultSQL = null;
+	public Map<Integer,Double> item_list = new HashMap<>();
 	
 
 	public final static int     DB_UNKNOWN = 0,
@@ -59,11 +62,23 @@ public class LoadData
 								DB_MYSQL = 4,
 								DB_COCKROACH = 5;
 
-    public static void main(String[] args) {
-	int     i;
+	public  final static int realic = 0,
+							 Uniform = 1,
+							 Gaussian = 2;
 
-	System.out.println("Starting BenchmarkSQL LoadData");
-	System.out.println("");
+
+	public static final CountDownLatch itemLoadLatch = new CountDownLatch(1);//同步函数
+
+    public static void main(String[] args) {
+		
+
+		System.out.println("Starting BenchmarkSQL LoadData");
+		System.out.println("");
+		new LoadData(args);
+	}
+
+	public LoadData(String[] args){
+	int     i;
 
 	/*
 	 * Load the Benchmark properties file.
@@ -110,6 +125,7 @@ public class LoadData
 	numWorkers      = iniGetInt("loadWorkers", 4);
 	fileLocation    = iniGetString("fileLocation");
 	csvNullValue    = iniGetString("csvNullValue", "NULL");
+	data_distribution = iniGetInt("value_distribution",Uniform);
 
 
 	
@@ -202,10 +218,10 @@ public class LoadData
 		dbConn.setAutoCommit(false);
 		if (writeCSV)
 		    workers[i] = new LoadDataWorker(i, csvNullValue,
-							rnd.newRandom(),dbtype);
+							rnd.newRandom(),dbtype,data_distribution,this);
 		else
 		    workers[i] = new LoadDataWorker(i, dbConn,
-							rnd.newRandom(),dbtype);
+							rnd.newRandom(),dbtype,data_distribution,this);
 		workerThreads[i] = new Thread(workers[i]);
 		workerThreads[i].start();
 	    }

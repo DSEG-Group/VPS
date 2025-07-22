@@ -1,4 +1,0 @@
-run,elapsed,device,rdiops,rdmerges,rdkbps,wriops,wrmerges,wrkbps
-494,1000,blk_sda,0.0,0.0,0.0,902.0,0.0,10072.0
-494,2000,blk_sda,0.0,0.0,0.0,4500.0,0.0,27720.0
-494,3000,blk_sda,0.0,0.0,0.0,3458.0,0.0,24248.0

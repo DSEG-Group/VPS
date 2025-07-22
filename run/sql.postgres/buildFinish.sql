@@ -7,4 +7,4 @@
 vacuum analyze;
 
 
-Create Database bmsql with template postgres owner dseg;
+-- Create Database bmsql with template postgres owner lyb;

@@ -19,7 +19,8 @@ public class jTPCCTData {
 	
 	private 	  int with_prio = 0;
 	private 	  int timecounter = 0;
-	private		  boolean value_loss = false;
+	private		  boolean value_loss = true;
+	private       jTPCCTerminal parent;
 
 	public final static int DB_UNKNOWN = 0,
 			DB_FIREBIRD = 1,
@@ -28,7 +29,9 @@ public class jTPCCTData {
 			DB_MYSQL = 4,
 			DB_COCKROACH = 5;
 
-	public final static int HIGH_PRIO = 2,
+	public final static int
+			EX_HIGH_PRIO = 3, 
+			HIGH_PRIO = 2,
 			NORMAL_PRIO = 1,
 			LOW_PRIO = 0;
 
@@ -39,7 +42,9 @@ public class jTPCCTData {
 			TT_DELIVERY = 4,
 			TT_DELIVERY_BG = 5,
 			TT_NONE = 6,
-			TT_DONE = 7;
+			TT_DONE = 7,
+			TT_RANDOM = 8,
+			TT_TRIGER_RESTOCK = 9;
 
 	public final static String transTypeNames[] = {
 			"NEW_ORDER", "PAYMENT", "ORDER_STATUS", "STOCK_LEVEL",
@@ -67,6 +72,7 @@ public class jTPCCTData {
 	private double transVal_real;
 	private long timeDelta;// 时差
 	private double abortPoss;
+	private long sessionTimestamp;
 
 	private int terminalWarehouse = 0;
 	private int terminalDistrict = 0;
@@ -85,6 +91,11 @@ public class jTPCCTData {
 	private Formatter resultFmt = new Formatter(resultSB);
 
 	private Vector<String> Querylist = new Vector<String>();
+
+	public jTPCCTData(jTPCCTerminal parent){
+		this.parent = parent;
+		value_loss = parent.value_loss;
+	}
 
 	public void setNumWarehouses(int num) {
 		numWarehouses = num;
@@ -238,7 +249,7 @@ public class jTPCCTData {
 
 	public String resultLine(long sessionStart) {
 		String line;
-
+		transDue = transStart;
 		resultFmt.format("%d,%d,%d,%d,%d,%s,%d,%d,%.2f,%d,%d\n",
 				transGeneratime - sessionStart,
 				transStart - sessionStart,
@@ -262,6 +273,8 @@ public class jTPCCTData {
 			if(SQLString!=""){
 				SQLString = i + ":\n{\"sql\":\"BEGIN;\n" + SQLString;
 				SQLString += "\"value\":"+"\""+transVal_real+"\",\n";
+				SQLString += "\"priority\":\""+this.priority+"\",\n";
+				SQLString += "\"generateTime\":\""+(this.transGeneratime-sessionStart)+"\",\n";
 				switch (transType) {
 					case TT_NEW_ORDER:
 						SQLString += "\"transType\":\"New-Order\"},\n";
@@ -331,7 +344,7 @@ public class jTPCCTData {
 		{
 			if (value_level <= this.extreme_high_value_rate) {
 				newOrder.ol_i_id[i] = rnd.getItemExtremeHighValueID();
-				priority = HIGH_PRIO;
+				priority = EX_HIGH_PRIO;
 			} else {
 				if (value_level > this.extreme_high_value_rate &&
 						value_level <= this.high_value_rate + this.extreme_high_value_rate) {
@@ -592,7 +605,10 @@ public class jTPCCTData {
 				SQLString += stmt.toString()+";\n";
 			}
 
-			stmt.executeUpdate();
+			int row = stmt.executeUpdate();
+			if(row < 1){
+				System.out.println("Insert the order row false");
+			}
 
 			if(timecounter == 1){
 				timeCounterNow = System.currentTimeMillis();
@@ -780,6 +796,7 @@ public class jTPCCTData {
 						newOrder.dist_value[seq] = rs.getString(distName);
 						newOrder.found[seq] = true;
 						if (item != null) {
+							newOrder.i_price[seq] = item.i_price;
 							newOrder.ol_amount[seq] = item.i_price * newOrder.ol_quantity[seq];
 							if (item.i_data.contains("ORIGINAL") &&
 									rs.getString("s_data").contains("ORIGINAL"))
@@ -791,6 +808,8 @@ public class jTPCCTData {
 				}
 			}
 			rs.close();
+			int flag = 0;//用于标记该订单是否有商品需要补货
+			Map<Integer,Double>reStock_item = new HashMap<>();
 
 			for (int i = 0; i < ol_cnt; i++) {
 				int ol_number = i + 1;
@@ -802,16 +821,22 @@ public class jTPCCTData {
 							" not fount");
 				}
 
+				parent.parent.updateHotItem(newOrder.ol_i_id[seq]);
+
 				total_amount += newOrder.ol_amount[seq] *
 						(1.0 - newOrder.c_discount) *
 						(1.0 + newOrder.w_tax + newOrder.d_tax);
 				stmt = db.stmtNewOrderUpdateStock;
 				// Update the STOCK row.
-				if (newOrder.s_quantity[seq] >= newOrder.ol_quantity[seq] + 10)
+				if (newOrder.s_quantity[seq] >= newOrder.ol_quantity[seq])
 					stmt.setInt(1, newOrder.s_quantity[seq] -
 							newOrder.ol_quantity[seq]);
 				else
-					stmt.setInt(1, newOrder.s_quantity[seq] + 91);
+					{
+						stmt.setInt(1, newOrder.s_quantity[seq]);//自动补货
+						flag = 1;
+						reStock_item.put(newOrder.ol_i_id[seq],newOrder.i_price[seq]);
+					}
 				stmt.setInt(2, newOrder.ol_quantity[seq]);
 				if (newOrder.ol_supply_w_id[seq] == newOrder.w_id)
 					stmt.setInt(3, 0);
@@ -863,6 +888,13 @@ public class jTPCCTData {
 				}
 				insertOrderLineBatch.addBatch();
 			}
+			if(flag == 1){
+				parent.set_next_txn_type(TT_TRIGER_RESTOCK,reStock_item);
+				SQLString += "Abort;\",\n";//商品不够，则进行下一个事务执行补货。
+				insertOrderLineBatch.clearBatch();
+				db.rollback();
+				return;	
+			}
 
 			// All done ... execute the batches.
 			insertOrderLineBatch.executeBatch();
@@ -887,15 +919,41 @@ public class jTPCCTData {
 
 			insertOrderLineBatch.clearBatch();
 
+
+			stmt = db.stmtNewOrderSelectCustomer;
+			stmt.setInt(1, newOrder.w_id);
+			stmt.setInt(2, newOrder.d_id);
+			stmt.setInt(3, newOrder.c_id);
+
+			rs = stmt.executeQuery();
+
+			if(!rs.next()){
+				throw new Exception("Customer with" +
+				" W_ID=" + newOrder.w_id +
+				" D_ID=" + newOrder.d_id +
+				" C_ID=" + newOrder.c_id +
+				" not fount");
+			}
+
+			double c_order_price = rs.getInt("c_order_price_cnt");
+			
+			double alpha = 0.7;
+			double beta = 0.3;
+			transVal_real = alpha*total_amount+beta*c_order_price;//把顾客过去的订单历史也考虑在内。
+			c_order_price = (newOrder.total_amount + c_order_price)/2;
+			
+
+
 			newOrder.execution_status = new String("Order placed");
 			newOrder.total_amount = total_amount;
-			transVal_real = total_amount;
+			
 
 			stmt = db.stmtNewOrderUpdateCustomer;
 			stmt.setDouble(1,newOrder.total_amount);
-			stmt.setInt(2,newOrder.w_id);
-			stmt.setInt(3,newOrder.d_id);
-			stmt.setInt(4,newOrder.c_id);
+			stmt.setDouble(2,c_order_price);
+			stmt.setInt(3,newOrder.w_id);
+			stmt.setInt(4,newOrder.d_id);
+			stmt.setInt(5,newOrder.c_id);
 
 			if(dbType == DB_MYSQL){
 				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
@@ -922,6 +980,20 @@ public class jTPCCTData {
 			}
 			db.commit();
 			SQLString += "COMMIT;\",\n";
+
+
+			if(transVal_real>=5647.5){
+				this.priority = EX_HIGH_PRIO;
+			}
+			else if(transVal_real>=3765){
+				this.priority = HIGH_PRIO;
+			}
+			else if(transVal_real>=1882.5){
+				this.priority = NORMAL_PRIO;
+			}
+			else{
+				this.priority = LOW_PRIO;
+			}
 
 
 
@@ -1317,7 +1389,20 @@ public class jTPCCTData {
 				payment.h_amount+=rs.getInt("ol_amount");
 			}
 			
-			transVal_real = payment.h_amount;
+			double alpha = 0.9;
+			transVal_real = alpha*payment.h_amount;
+			if(transVal_real>=50000){
+				this.priority = EX_HIGH_PRIO;
+			}
+			else if(transVal_real>=10000){
+				this.priority = HIGH_PRIO;
+			}
+			else if(transVal_real>=1000){
+				this.priority = NORMAL_PRIO;
+			}
+			else{
+				this.priority = LOW_PRIO;
+			}
 			
 			// Update the DISTRICT.
 			stmt = db.stmtPaymentUpdateDistrict;
@@ -1943,6 +2028,7 @@ public class jTPCCTData {
 		int ol_idx = 0;
 		int dbType;
 		dbType = db.getdbtype();
+		transVal_real = 0;
 
 		try {
 			if(with_prio == 1){
@@ -2055,6 +2141,7 @@ public class jTPCCTData {
 				orderStatus.ol_supply_w_id[ol_idx] = rs.getInt("ol_supply_w_id");
 				orderStatus.ol_quantity[ol_idx] = rs.getInt("ol_quantity");
 				orderStatus.ol_amount[ol_idx] = rs.getDouble("ol_amount");
+				transVal_real += orderStatus.ol_amount[ol_idx];
 				ol_delivery_d = rs.getTimestamp("ol_delivery_d");
 				if (ol_delivery_d != null)
 					orderStatus.ol_delivery_d[ol_idx] = ol_delivery_d.toString();
@@ -2072,7 +2159,8 @@ public class jTPCCTData {
 				orderStatus.ol_delivery_d[ol_idx] = null;
 				ol_idx++;
 			}
-
+			double alpha = 0.2;
+			transVal_real = alpha*transVal_real;
 			db.commit();
 			SQLString += "Commit;\",\n";
 		} catch (SQLException se) {
@@ -2172,7 +2260,7 @@ public class jTPCCTData {
 	 * ***** STOCK_LEVEL related methods and subclass. **********************
 	 * **********************************************************************
 	 *********************************************************************/
-	public void generateStockLevel(Logger log, jTPCCRandom rnd, long due) {
+	public void generateStockLevel(Logger log, jTPCCRandom rnd, long due,Map<Integer,Double> reStock) {
 		transType = TT_STOCK_LEVEL;
 		transDue = due;
 		transStart = 0;
@@ -2192,12 +2280,14 @@ public class jTPCCTData {
 		stockLevel.w_id = terminalWarehouse;
 		stockLevel.d_id = terminalDistrict;
 		stockLevel.threshold = rnd.nextInt(10, 20);
+		stockLevel.reStock = reStock;
 	}
 
 	private void executeStockLevel(Logger log, jTPCCConnection db)
 			throws Exception {
 		PreparedStatement stmt;
 		ResultSet rs;
+		transVal_real = 0;
 		int dbType = db.getdbtype();
 		try {
 			if(with_prio == 1){
@@ -2214,30 +2304,99 @@ public class jTPCCTData {
 					stmt.execute();
 				}
 			}
-			stmt = db.stmtStockLevelSelectLow;
-			stmt.setInt(1, stockLevel.w_id);
-			stmt.setInt(2, stockLevel.threshold);
-			stmt.setInt(3, stockLevel.w_id);
-			stmt.setInt(4, stockLevel.d_id);
+			int k = 0;
+			if(stockLevel.reStock.isEmpty()){//管理员触发补货事务
+				stmt = db.stmtStockLevelSelectOrder;
+				stmt.setInt(1, stockLevel.w_id);
+				stmt.setInt(2, stockLevel.d_id);
+				rs = stmt.executeQuery();
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
-			}
-
-			rs = stmt.executeQuery();
-			if (!rs.next()) {
-				throw new Exception("Failed to get low-stock for" +
+				if(!rs.next()){
+					rs.close();
+					throw new SQLException("d_next_o_id for" +
 						" W_ID=" + stockLevel.w_id +
-						" D_ID=" + stockLevel.d_id);
+						" D_ID=" + stockLevel.d_id +" not found");
+				}
+				stockLevel.d_next_o_id = rs.getInt("d_next_o_id");
+				
+
+				stmt = db.stmtStockLevelSelectStockDetail;
+				stmt.setInt(1, stockLevel.w_id);
+				stmt.setInt(2, stockLevel.d_id);
+				stmt.setInt(3, stockLevel.d_next_o_id);
+				rs = stmt.executeQuery();
+				boolean isContainHotItem = false;
+				while(rs.next()){
+					if(k >= 50){//一次最多补50种货物
+						break;
+					}
+					stockLevel.s_i_id[k++] = rs.getInt("s_i_id");
+					stockLevel.ol_amount = rs.getDouble("ol_amount");
+					stockLevel.ol_quantity = rs.getInt("ol_quantity");
+					double price = (stockLevel.ol_amount / stockLevel.ol_quantity);//计算货物单价
+					transVal_real += price;
+					if(parent.parent.isHotItem(stockLevel.s_i_id[k-1])){
+						isContainHotItem = true;
+					}
+				}
+				double alpha = 0.9;
+				if(isContainHotItem){
+					alpha = 1.0;
+					transVal_real = transVal_real*alpha;//大致测量该事务价值
+				}
+				else{
+					alpha = 0.8;
+					transVal_real = transVal_real*alpha;
+				}
+
+
+
+			}else{//new-order缺货导致补货发生
+				for(Map.Entry<Integer, Double> entry : stockLevel.reStock.entrySet()){
+					stockLevel.s_i_id[k++] = entry.getKey();
+					transVal_real += entry.getValue()*5;
+				}
+				transVal_real = transVal_real/k*10;//触发型补货事务价值应该更高，权重设置为10
+
+				
 			}
-			stockLevel.low_stock = rs.getInt("low_stock");
-			rs.close();
+
+			stmt = db.stmtStockLevelUpateStock;
+			for(int i = 0;i<k;i++){
+				stmt.setInt(1, stockLevel.w_id);
+				stmt.setInt(2,stockLevel.s_i_id[i]);
+				stmt.addBatch();
+				if(dbType == DB_MYSQL){
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				}
+				else{
+					SQLString += stmt.toString()+";\n";
+				}
+			}
+
+			stmt.executeBatch();
+
+			stmt.clearBatch();
+
+			if(value_loss){
+				
+				timeCounterNow = System.currentTimeMillis();
+					timeDelta = timeCounterNow - transStart;
+					if (timeDelta > 200) {//executeStockLevel 可容忍等待时间为200ms
+						double valloss = transVal_real*(timeDelta - 200) / (0.1 * 200) * 0.008;
+						if(valloss<transVal_real){
+							transVal_real = transVal_real-transVal_real*(timeDelta - 200) / (0.1 * 200) * 0.008;
+						}
+						else{
+							transVal_real = 0;
+						}
+					}
+			}
+
 
 			db.commit();
 			SQLString += "Commit;\",\n";
+			priority = 1;
 		} catch (SQLException se) {
 			log.error("Unexpected SQLException in STOCK_LEVEL");
 			for (SQLException x = se; x != null; x = x.getNextException())
@@ -2283,6 +2442,11 @@ public class jTPCCTData {
 		public int w_id;
 		public int d_id;
 		public int threshold;
+		public int d_next_o_id;
+		public double ol_amount;
+		public int ol_quantity;
+		public int[] s_i_id = new int[101]; 
+		public Map<Integer,Double>reStock;
 
 		/* terminal output data */
 		public int low_stock;
@@ -2315,6 +2479,7 @@ public class jTPCCTData {
 		delivery.o_carrier_id = rnd.nextInt(1, 10);
 		delivery.execution_status = null;
 		delivery.deliveryBG = null;
+		transVal_real = 0;
 	}
 
 	private void executeDelivery(Logger log, jTPCCConnection db) {
@@ -2328,7 +2493,7 @@ public class jTPCCTData {
 		 * (DeliveryBG). We store that TData object in the delivery
 		 * part for the caller to pick up and queue/execute.
 		 */
-		delivery.deliveryBG = new jTPCCTData();
+		delivery.deliveryBG = new jTPCCTData(this.parent);
 		delivery.deliveryBG.generateDeliveryBG(delivery.w_id, now,
 				new Timestamp(now).toString(), this);
 		delivery.execution_status = new String("Delivery has been queued");
@@ -2396,7 +2561,7 @@ public class jTPCCTData {
 		transEnd = 0;
 		transRbk = false;
 		transError = null;
-		transVal_real = 1;
+		transVal_real = 0;
 		transGeneratime = System.currentTimeMillis();
 
 		newOrder = null;
@@ -2431,6 +2596,7 @@ public class jTPCCTData {
 		int c_id;
 		double sum_ol_amount;
 		long now = System.currentTimeMillis();
+		transStart = System.currentTimeMillis();
 		int dbType = db.getdbtype();
 		try {
 			if(with_prio == 1){
@@ -2468,7 +2634,8 @@ public class jTPCCTData {
 						rs.close();
 						break;
 					}
-					o_id = rs.getInt("no_o_id");
+						o_id = rs.getInt("no_o_id");
+					
 					rs.close();
 					/*
 					 * This logic only works in SNAPSHOT isolation
@@ -2592,11 +2759,15 @@ public class jTPCCTData {
 			}
 
 			rs = stmt1.executeQuery();
-
+			int k = 0;
 			while (rs.next()) {
 				d_id = rs.getInt("ol_d_id");
 				deliveryBG.sum_ol_amount[d_id - 1] = rs.getDouble("sum_ol_amount");
+				transVal_real += deliveryBG.sum_ol_amount[d_id - 1];
+				k++;
 			}
+			transVal_real = transVal_real/k;
+			transVal_real = transVal_real *0.5;//快递事务权重为0.5
 			rs.close();
 
 			// Update the CUSTOMER.
@@ -2628,6 +2799,22 @@ public class jTPCCTData {
 				stmt1.executeUpdate();
 				// Recored the delivered O_ID in the DELIVERY_BG
 			}
+
+			if(value_loss){
+				
+				timeCounterNow = System.currentTimeMillis();
+					timeDelta = timeCounterNow - transStart;
+					if (timeDelta > 3000) {//delivery 可容忍等待时间为3s
+						double valloss = transVal_real*(timeDelta - 3000) / (0.1 * 3000) * 0.008;
+						if(valloss<transVal_real){
+							transVal_real = transVal_real-transVal_real*(timeDelta - 3000) / (0.1 * 3000) * 0.008;
+						}
+						else{
+							transVal_real = 0;
+						}
+					}
+			}
+
 			db.commit();
 			SQLString += "COMMIT;\",\n";
 		} catch (SQLException se) {
@@ -2700,6 +2887,7 @@ public class jTPCCTData {
 	}
 
 	private void transactionFromJson(String JsonLine){
+		this.transGeneratime = System.currentTimeMillis();
 		int head = JsonLine.indexOf(":")+1;
 		int tail = JsonLine.length()-1;
 		JsonLine  = JsonLine.substring(head, tail);
@@ -2714,6 +2902,11 @@ public class jTPCCTData {
 		this.transVal_real = Double.parseDouble(ValueString);
 
 		String type = SQLJson.getString("transType");
+		String arriveString = SQLJson.getString("generateTime");
+		long generateTime = Long.parseLong(arriveString);
+		String priorityString = SQLJson.getString("priority");
+		priority = Integer.parseInt(priorityString);
+		this.transGeneratime = this.sessionTimestamp + generateTime;
 		if(type.equals("New-Order")){
 			this.transType = TT_NEW_ORDER;
 		}
@@ -2732,11 +2925,19 @@ public class jTPCCTData {
 	}
 
 
-	public void executeStandardQuery(Logger log, String JsonString,jTPCCConnection db)throws Exception{
+	public void executeStandardQuery(Logger log, String JsonString,long sessionStart,jTPCCConnection db)throws Exception{
+		this.sessionTimestamp = sessionStart;
 		transactionFromJson(JsonString);
+		long currentTimestamp = System.currentTimeMillis();
+		while(currentTimestamp<transGeneratime){
+			currentTimestamp = System.currentTimeMillis();
+		}
 		int len = Querylist.size();
 		String Query = "";
+		double typeWeight = 0;
 		try {
+			this.transStart = System.currentTimeMillis();
+			this.transDue = this.transStart;
 			for(int i  = 0;i<len -2 ;i++){
 				Query = Querylist.get(i);
 				db.setStandardQuery(Query);
@@ -2745,20 +2946,48 @@ public class jTPCCTData {
 			}
 			Query = Querylist.get(len-1);
 			if(Query.equals("Abort")){
+				this.abort = 1;
 				db.rollback();
+				this.transEnd = System.currentTimeMillis();
 			}
 			else{
 				db.commit();
+				this.transEnd = System.currentTimeMillis();
+				if(value_loss){
+					timeCounterNow = System.currentTimeMillis();
+						timeDelta = timeCounterNow - this.transGeneratime;
+						if(transType == TT_NEW_ORDER || transType == TT_PAYMENT){
+							if(transType == TT_NEW_ORDER){
+								typeWeight = 0.008;
+							}
+							if(transType == TT_PAYMENT){
+								typeWeight = 0.017;
+							}
+							if (timeDelta > 200) {
+								double valloss = transVal_real*(timeDelta - 200) / (0.1 * 200) * typeWeight;
+								if(valloss<transVal_real){
+									transVal_real = transVal_real-transVal_real*(timeDelta - 200) / (0.1 * 200) * typeWeight;
+								}
+								else{
+									transVal_real = 0;
+								}
+							}
+						}
+				}
 			}
 		}catch (SQLException se) {
 			log.error("Unexpected SQLException");
 			log.error(Query);
+			this.abort = 1;
 			for (SQLException x = se; x != null; x = x.getNextException())
 				log.error(x.getMessage());
 			se.printStackTrace();
 
 			try {
 				db.rollback();
+				this.transEnd = System.currentTimeMillis();
+				this.abort = 1;
+				this.transVal_real = 0;
 			} catch (SQLException se2) {
 				throw new Exception("Unexpected SQLException on rollback: " +
 						se2.getMessage());
@@ -2766,6 +2995,9 @@ public class jTPCCTData {
 			} catch (Exception e) {
 				try {
 					db.rollback();
+					this.transEnd = System.currentTimeMillis();
+					this.abort = 1;
+					this.transVal_real = 0;
 				} catch (SQLException se2) {
 					throw new Exception("Unexpected SQLException on rollback: " +
 							se2.getMessage());
@@ -2777,6 +3009,104 @@ public class jTPCCTData {
 
 	public String getTransType(){
 		return transTypeNames[this.transType];
+	}
+
+
+	public void executeStandardQuery_Heap(Logger log, String SQLString,int transType,double transVal,long generateTime, long sessionTimestamp,int priority,jTPCCConnection db)throws Exception{
+		this.transType = transType;
+		this.transVal_real = transVal;
+		this.sessionTimestamp = sessionTimestamp;
+		this.transGeneratime = sessionTimestamp + generateTime;
+		this.priority = priority;
+		double typeWeight = 0;
+		String[] Querys = SQLString.split(";");
+		for(int i = 1;i<Querys.length;i++){//去掉Begin和Commit
+				Querylist.add(Querys[i]);
+		}
+		int len = Querylist.size();
+		String Query = "";
+		try {
+			this.transStart = System.currentTimeMillis();
+			this.transDue = this.transStart;
+			for(int i  = 0;i<len -2 ;i++){
+				Query = Querylist.get(i);
+				db.setStandardQuery(Query);
+				PreparedStatement stmt = db.stmtStandardQuery;
+				stmt.execute();
+			}
+			Query = Querylist.get(len-1);
+			if(Query.equals("Abort")){
+				this.abort = 1;
+				transVal = 0;
+				db.rollback();
+				this.transEnd = System.currentTimeMillis();
+			}
+			else{
+				db.commit();
+				this.transEnd = System.currentTimeMillis();
+				if(value_loss){
+					timeCounterNow = System.currentTimeMillis();
+						timeDelta = timeCounterNow - this.transGeneratime;
+						if(transType == TT_NEW_ORDER || transType == TT_PAYMENT){
+							if(transType == TT_NEW_ORDER){
+								typeWeight = 0.008;
+							}
+							if(transType == TT_PAYMENT){
+								typeWeight = 0.017;
+							}
+							if (timeDelta > 200) {
+								double valloss = transVal_real*(timeDelta - 200) / (0.1 * 200) * typeWeight;
+								if(valloss<transVal_real){
+									transVal_real = transVal_real-transVal_real*(timeDelta - 200) / (0.1 * 200) * typeWeight;
+								}
+								else{
+									transVal_real = 0;
+								}
+							}
+						}
+				}
+			}
+		}catch (SQLException se) {
+			log.error("Unexpected SQLException");
+			log.error(Query);
+			for (SQLException x = se; x != null; x = x.getNextException())
+				log.error(x.getMessage());
+			se.printStackTrace();
+
+			try {
+				db.rollback();
+				this.abort = 1;
+				this.transEnd = System.currentTimeMillis();
+				this.transVal_real = 0;
+			} catch (SQLException se2) {
+				throw new Exception("Unexpected SQLException on rollback: " +
+						se2.getMessage());
+			}
+			} catch (Exception e) {
+				try {
+					db.rollback();
+					this.abort = 1;
+					this.transEnd = System.currentTimeMillis();
+					this.transVal_real = 0;
+				} catch (SQLException se2) {
+					throw new Exception("Unexpected SQLException on rollback: " +
+							se2.getMessage());
+				}
+				throw new Exception(Query + "\nUnexpected Exception :" +
+				e.getMessage());
+			}
+
+	}
+	public long get_transEndTime(){
+		return this.transEnd;
+	}
+
+	public long get_transGenerateTime(){
+		return this.transGeneratime;
+	}
+
+	public int get_priority(){
+		return priority;
 	}
 
 }
