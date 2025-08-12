@@ -16,9 +16,9 @@ if [ "$DB" = "postgres" ] ; then
     psql -h 0.0.0.0 -p 11452 -U postgres -d bmsql -f ./standard_data/standardDatabase_pg.sql
 fi
 if [ "$DB" = "mysql" ] ; then
-    # mysql -h 0.0.0.0 -P 4397 -u root -p123456 -e "create database bmsql;" 
-    mysql -h 0.0.0.0 -P 4397 -u root -p123456 bmsql < ./standard_data/standardDatabase_mysql.sql
+    mysql -h 0.0.0.0 -P 4397 -u root -p123456 -e "create database bmsql;" 
+    mysql -h 0.0.0.0 -P 4397 -u root -p123456 --max_allowed_packet=1G --net_buffer_length=1M --local-infile=1 bmsql < ./standard_data/standardDatabase_mysql.sql
 fi
-# if ["$DB" = "oracle"] ; then
-#     sqlplus root/123456@172.17.0.7:1521/ORCLPDB @/home/lyb/vps_benchmark/run/standard_data/standardDatabase_oracle.sql
-# fi
+if [ "$DB" = "oracle" ] ; then
+    sqlplus lyb/123456@172.17.0.4:1521/ORCLPDB @/home/lyb/vps_benchmark/run/standard_data/standardDatabase_oracle.sql
+fi

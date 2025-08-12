@@ -130,6 +130,10 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 
     public void run()
     {
+	if(dbType == parent.DB_ORACLE){
+		jTPCCTData  term = new jTPCCTData(this);
+		term.executeOraclePre(db);
+	}
 	if(!isReadJson){
 		if(!standardSQL){
 			if(isHeap){
@@ -565,6 +569,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 				String typename = term.getTransType();
 				priority = term.get_priority();
 				latency_queue.add(term.get_transEndTime() - term.get_transGenerateTime());
+				is_abort = term.get_abort();
 				switch(priority){
 					case EX_HIGH_PRIO:
 						E_H_latency_q.add(term.get_transEndTime() - term.get_transGenerateTime());

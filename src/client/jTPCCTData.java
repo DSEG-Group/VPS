@@ -12,6 +12,8 @@ import java.util.*;
 import java.sql.*;
 import org.json.JSONObject;
 
+import oracle.jdbc.OraclePreparedStatement;
+
 
 
 public class jTPCCTData {
@@ -21,6 +23,7 @@ public class jTPCCTData {
 	private 	  int timecounter = 0;
 	private		  boolean value_loss = true;
 	private       jTPCCTerminal parent;
+	private 	  List<Object> params =new ArrayList<>();
 
 	public final static int DB_UNKNOWN = 0,
 			DB_FIREBIRD = 1,
@@ -469,11 +472,28 @@ public class jTPCCTData {
 			stmt = db.stmtNewOrderSelectDist;
 			stmt.setInt(1, newOrder.w_id);
 			stmt.setInt(2, newOrder.d_id);
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			params.clear();
+			params.add(newOrder.w_id);
+			params.add(newOrder.d_id);
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			rs = stmt.executeQuery();
@@ -513,13 +533,32 @@ public class jTPCCTData {
 			stmt.setInt(1, newOrder.w_id);
 			stmt.setInt(2, newOrder.d_id);
 			stmt.setInt(3, newOrder.c_id);
+			params.clear();
+			params.add(newOrder.w_id);
+			params.add(newOrder.d_id);
+			params.add(newOrder.c_id);
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
-			else{
-				SQLString += stmt.toString()+";\n";
-			}
+
 
 			rs = stmt.executeQuery();
 
@@ -560,12 +599,29 @@ public class jTPCCTData {
 			stmt = db.stmtNewOrderUpdateDist;
 			stmt.setInt(1, newOrder.w_id);
 			stmt.setInt(2, newOrder.d_id);
+			params.clear();
+			params.add(newOrder.w_id);
+			params.add(newOrder.d_id);
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			stmt.executeUpdate();
@@ -590,19 +646,42 @@ public class jTPCCTData {
 
 			// Insert the ORDER row
 			stmt = db.stmtNewOrderInsertOrder;
+			Timestamp time_now = new Timestamp(System.currentTimeMillis());
 			stmt.setInt(1, o_id);
 			stmt.setInt(2, newOrder.d_id);
 			stmt.setInt(3, newOrder.w_id);
 			stmt.setInt(4, newOrder.c_id);
-			stmt.setTimestamp(5, new Timestamp(System.currentTimeMillis()));
+			stmt.setTimestamp(5, time_now);
 			stmt.setInt(6, ol_cnt);
 			stmt.setInt(7, o_all_local);
+			params.clear();
+			params.add(o_id);
+			params.add(newOrder.d_id);
+			params.add(newOrder.w_id);
+			params.add(newOrder.c_id);
+			params.add(time_now);
+			params.add(ol_cnt);
+			params.add(o_all_local);
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			int row = stmt.executeUpdate();
@@ -633,12 +712,30 @@ public class jTPCCTData {
 			stmt.setInt(1, o_id);
 			stmt.setInt(2, newOrder.d_id);
 			stmt.setInt(3, newOrder.w_id);
+			params.clear();
+			params.add(o_id);
+			params.add(newOrder.d_id);
+			params.add(newOrder.w_id);
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			stmt.executeUpdate();
@@ -677,16 +774,32 @@ public class jTPCCTData {
 			stmt = db.stmtNewOrderSelectItemBatch[itemIds.size()];
 			HashMap<Integer, NewOrderItem> itemMap = new HashMap<Integer, NewOrderItem>();
 			int i_idx = 0;
+			params.clear();
 			for (Integer x : itemIds) {
 				i_idx++;
 				stmt.setInt(i_idx, x.intValue());
+				params.add(x.intValue());
 			}
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			rs = stmt.executeQuery();
@@ -749,17 +862,35 @@ public class jTPCCTData {
 			}
 
 			stmt = db.stmtNewOrderSelectStockBatch[ol_cnt];
+			params.clear();
 			for (int i = 0; i < ol_cnt; ++i) {
 				int seq = ol_seq[i];
 				stmt.setInt(i * 2 + 1, newOrder.ol_supply_w_id[seq]);
 				stmt.setInt(i * 2 + 2, newOrder.ol_i_id[seq]);
+				params.add(newOrder.ol_supply_w_id[seq]);
+				params.add(newOrder.ol_i_id[seq]);
 			}
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
+
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			rs = stmt.executeQuery();
@@ -827,29 +958,54 @@ public class jTPCCTData {
 						(1.0 - newOrder.c_discount) *
 						(1.0 + newOrder.w_tax + newOrder.d_tax);
 				stmt = db.stmtNewOrderUpdateStock;
+				params.clear();
 				// Update the STOCK row.
-				if (newOrder.s_quantity[seq] >= newOrder.ol_quantity[seq])
+				if (newOrder.s_quantity[seq] >= newOrder.ol_quantity[seq]){
 					stmt.setInt(1, newOrder.s_quantity[seq] -
 							newOrder.ol_quantity[seq]);
+					params.add(newOrder.s_quantity[seq] - newOrder.ol_quantity[seq]);
+				}
 				else
 					{
 						stmt.setInt(1, newOrder.s_quantity[seq]);//自动补货
+						params.add(newOrder.s_quantity[seq]);
 						flag = 1;
 						reStock_item.put(newOrder.ol_i_id[seq],newOrder.i_price[seq]);
 					}
 				stmt.setInt(2, newOrder.ol_quantity[seq]);
-				if (newOrder.ol_supply_w_id[seq] == newOrder.w_id)
+				params.add(newOrder.ol_quantity[seq]);
+				if (newOrder.ol_supply_w_id[seq] == newOrder.w_id){
 					stmt.setInt(3, 0);
-				else
-					stmt.setInt(3, 1);
-				stmt.setInt(4, newOrder.ol_supply_w_id[seq]);
-				stmt.setInt(5, newOrder.ol_i_id[seq]);
-
-				if(dbType == DB_MYSQL){
-					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					params.add(0);
 				}
 				else{
-					SQLString += stmt.toString()+";\n";
+					stmt.setInt(3, 1);
+					params.add(0);
+				}
+				stmt.setInt(4, newOrder.ol_supply_w_id[seq]);
+				stmt.setInt(5, newOrder.ol_i_id[seq]);
+				params.add(newOrder.ol_supply_w_id[seq]);
+				params.add(newOrder.ol_i_id[seq]);
+
+				// if(dbType == DB_MYSQL){
+				// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				// }
+				// else{
+				// 	SQLString += stmt.toString()+";\n";
+				// }
+				switch (dbType) {
+					case DB_MYSQL:
+						SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+						break;
+					case DB_POSTGRES:
+						SQLString += stmt.toString()+";\n";
+						break;
+					case DB_ORACLE:
+						String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+						sqlTemplate = buildDebugSql(sqlTemplate,params);
+						SQLString += sqlTemplate+";\n";
+					default:
+						break;
 				}
 
 				stmt.executeUpdate();
@@ -880,12 +1036,38 @@ public class jTPCCTData {
 				insertOrderLineBatch.setInt(7, newOrder.ol_quantity[seq]);
 				insertOrderLineBatch.setDouble(8, newOrder.ol_amount[seq]);
 				insertOrderLineBatch.setString(9, newOrder.dist_value[seq]);
-				if(dbType == DB_MYSQL){
-					SQLString += insertOrderLineBatch.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				params.clear();
+				params.add(o_id);
+				params.add(newOrder.d_id);
+				params.add(newOrder.w_id);
+				params.add(ol_number);
+				params.add(newOrder.ol_i_id[seq]);
+				params.add(newOrder.ol_supply_w_id[seq]);
+				params.add(newOrder.ol_quantity[seq]);
+				params.add(newOrder.ol_amount[seq]);
+				params.add(newOrder.dist_value[seq]);
+				// if(dbType == DB_MYSQL){
+				// 	SQLString += insertOrderLineBatch.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				// }
+				// else{
+				// 	SQLString += insertOrderLineBatch.toString()+";\n";
+				// }
+
+				switch (dbType) {
+					case DB_MYSQL:
+						SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+						break;
+					case DB_POSTGRES:
+						SQLString += stmt.toString()+";\n";
+						break;
+					case DB_ORACLE:
+						String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+						sqlTemplate = buildDebugSql(sqlTemplate,params);
+						SQLString += sqlTemplate+";\n";
+					default:
+						break;
 				}
-				else{
-					SQLString += insertOrderLineBatch.toString()+";\n";
-				}
+
 				insertOrderLineBatch.addBatch();
 			}
 			if(flag == 1){
@@ -893,6 +1075,7 @@ public class jTPCCTData {
 				SQLString += "Abort;\",\n";//商品不够，则进行下一个事务执行补货。
 				insertOrderLineBatch.clearBatch();
 				db.rollback();
+				abort = 1;
 				return;	
 			}
 
@@ -954,12 +1137,33 @@ public class jTPCCTData {
 			stmt.setInt(3,newOrder.w_id);
 			stmt.setInt(4,newOrder.d_id);
 			stmt.setInt(5,newOrder.c_id);
+			params.clear();
+			params.add(newOrder.total_amount);
+			params.add(c_order_price);
+			params.add(newOrder.w_id);
+			params.add(newOrder.d_id);
+			params.add(newOrder.c_id);
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
+
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			stmt.executeUpdate();
@@ -1214,18 +1418,28 @@ public class jTPCCTData {
 		// 	}
 
 			//Select the unpay order
-			if(dbType == DB_MYSQL){
-				stmt = db.stmtPaymentSelectNewOrder_mysql;
-			}
-			else{
-				stmt = db.stmtPaymentSelectNewOrder_pg;
-			}
+			stmt = db.stmtPaymentSelectNewOrder;
 			
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
+			params.clear();
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			rs = stmt.executeQuery();
@@ -1279,12 +1493,30 @@ public class jTPCCTData {
 			stmt.setInt(1, payment.o_id);
 			stmt.setInt(2, payment.w_id);
 			stmt.setInt(3, payment.d_id);
+			params.clear();
+			params.add(payment.o_id);
+			params.add(payment.w_id);
+			params.add(payment.d_id);
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			stmt.executeUpdate();
@@ -1293,12 +1525,31 @@ public class jTPCCTData {
 			stmt.setInt(1, payment.o_id);
 			stmt.setInt(2, payment.w_id);
 			stmt.setInt(3, payment.d_id);
+			params.clear();
+			params.add(payment.o_id);
+			params.add(payment.w_id);
+			params.add(payment.d_id);
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
+
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			rs = stmt.executeQuery();
@@ -1356,12 +1607,31 @@ public class jTPCCTData {
 			stmt.setInt(1, payment.o_id);
 			stmt.setInt(2, payment.w_id);
 			stmt.setInt(3, payment.d_id);
+			params.clear();
+			params.add(payment.o_id);
+			params.add(payment.w_id);
+			params.add(payment.d_id);
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
+
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			rs = stmt.executeQuery();
@@ -1409,12 +1679,31 @@ public class jTPCCTData {
 			stmt.setDouble(1, payment.h_amount);
 			stmt.setInt(2, payment.w_id);
 			stmt.setInt(3, payment.d_id);
+			params.clear();
+			params.add(payment.h_amount);
+			params.add(payment.w_id);
+			params.add(payment.d_id);
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
+
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			stmt.executeUpdate();
@@ -1441,12 +1730,30 @@ public class jTPCCTData {
 			stmt = db.stmtPaymentSelectDistrict;
 			stmt.setInt(1, payment.w_id);
 			stmt.setInt(2, payment.d_id);
+			params.clear();
+			params.add(payment.w_id);
+			params.add(payment.d_id);
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
+
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			rs = stmt.executeQuery();
@@ -1487,12 +1794,30 @@ public class jTPCCTData {
 			stmt = db.stmtPaymentUpdateWarehouse;
 			stmt.setDouble(1, payment.h_amount);
 			stmt.setInt(2, payment.w_id);
+			params.clear();
+			params.add(payment.h_amount);
+			params.add(payment.w_id);
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
+
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			stmt.executeUpdate();
@@ -1518,12 +1843,29 @@ public class jTPCCTData {
 			// Select the WAREHOUSE.
 			stmt = db.stmtPaymentSelectWarehouse;
 			stmt.setInt(1, payment.w_id);
+			params.clear();
+			params.add(payment.w_id);
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
+
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			rs = stmt.executeQuery();
@@ -1607,12 +1949,31 @@ public class jTPCCTData {
 			stmt.setInt(1, payment.c_w_id);
 			stmt.setInt(2, payment.c_d_id);
 			stmt.setInt(3, payment.c_id);
+			params.clear();
+			params.add(payment.c_w_id);
+			params.add(payment.c_d_id);
+			params.add(payment.c_id);
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
+
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			rs = stmt.executeQuery();
@@ -1671,12 +2032,33 @@ public class jTPCCTData {
 				stmt.setInt(3, payment.c_w_id);
 				stmt.setInt(4, payment.c_d_id);
 				stmt.setInt(5, payment.c_id);
+				params.clear();
+				params.add(payment.h_amount);
+				params.add(payment.h_amount);
+				params.add(payment.c_w_id);
+				params.add(payment.c_d_id);
+				params.add(payment.c_id);
 
-				if(dbType == DB_MYSQL){
-					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-				}
-				else{
-					SQLString += stmt.toString()+";\n";
+				// if(dbType == DB_MYSQL){
+				// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				// }
+				// else{
+				// 	SQLString += stmt.toString()+";\n";
+				// }
+
+				switch (dbType) {
+					case DB_MYSQL:
+						SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+						break;
+					case DB_POSTGRES:
+						SQLString += stmt.toString()+";\n";
+						break;
+					case DB_ORACLE:
+						String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+						sqlTemplate = buildDebugSql(sqlTemplate,params);
+						SQLString += sqlTemplate+";\n";
+					default:
+						break;
 				}
 
 				stmt.executeUpdate();
@@ -1705,12 +2087,31 @@ public class jTPCCTData {
 				stmt.setInt(1, payment.c_w_id);
 				stmt.setInt(2, payment.c_d_id);
 				stmt.setInt(3, payment.c_id);
+				params.clear();
+				params.add(payment.c_w_id);
+				params.add(payment.c_d_id);
+				params.add(payment.c_id);
 
-				if(dbType == DB_MYSQL){
-					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-				}
-				else{
-					SQLString += stmt.toString()+";\n";
+				// if(dbType == DB_MYSQL){
+				// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				// }
+				// else{
+				// 	SQLString += stmt.toString()+";\n";
+				// }
+
+				switch (dbType) {
+					case DB_MYSQL:
+						SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+						break;
+					case DB_POSTGRES:
+						SQLString += stmt.toString()+";\n";
+						break;
+					case DB_ORACLE:
+						String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+						sqlTemplate = buildDebugSql(sqlTemplate,params);
+						SQLString += sqlTemplate+";\n";
+					default:
+						break;
 				}
 
 				rs = stmt.executeQuery();
@@ -1744,9 +2145,11 @@ public class jTPCCTData {
 				rs.close();
 
 				stmt = db.stmtPaymentUpdateCustomerWithData;
+				params.clear();
 				stmt.setDouble(1, payment.h_amount);
+				params.add(payment.h_amount);
 				stmt.setDouble(2, payment.h_amount);
-
+				params.add(payment.h_amount);
 				StringBuffer sbData = new StringBuffer();
 				Formatter fmtData = new Formatter(sbData);
 				fmtData.format("C_ID=%d C_D_ID=%d C_W_ID=%d " +
@@ -1758,16 +2161,33 @@ public class jTPCCTData {
 					sbData.setLength(500);
 				payment.c_data = sbData.toString();
 				stmt.setString(3, payment.c_data);
-
+				params.add(payment.c_data);
 				stmt.setInt(4, payment.c_w_id);
+				params.add(payment.c_w_id);
 				stmt.setInt(5, payment.c_d_id);
+				params.add(payment.c_d_id);
 				stmt.setInt(6, payment.c_id);
+				params.add(payment.c_id);
 
-				if(dbType == DB_MYSQL){
-					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-				}
-				else{
-					SQLString += stmt.toString()+";\n";
+				// if(dbType == DB_MYSQL){
+				// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				// }
+				// else{
+				// 	SQLString += stmt.toString()+";\n";
+				// }
+				switch (dbType) {
+					case DB_MYSQL:
+						SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+						break;
+					case DB_POSTGRES:
+						SQLString += stmt.toString()+";\n";
+						break;
+					case DB_ORACLE:
+						String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+						sqlTemplate = buildDebugSql(sqlTemplate,params);
+						SQLString += sqlTemplate+";\n";
+					default:
+						break;
 				}
 
 				stmt.executeUpdate();
@@ -1793,20 +2213,43 @@ public class jTPCCTData {
 
 			// Insert the HISORY row.
 			stmt = db.stmtPaymentInsertHistory;
+			Timestamp time = new Timestamp(h_date);
 			stmt.setInt(1, payment.c_id);
 			stmt.setInt(2, payment.c_d_id);
 			stmt.setInt(3, payment.c_w_id);
 			stmt.setInt(4, payment.d_id);
 			stmt.setInt(5, payment.w_id);
-			stmt.setTimestamp(6, new Timestamp(h_date));
+			stmt.setTimestamp(6, time);
 			stmt.setDouble(7, payment.h_amount);
 			stmt.setString(8, payment.w_name + "    " + payment.d_name);
-
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			params.clear();
+			params.add(payment.c_id);
+			params.add(payment.c_d_id);
+			params.add(payment.c_w_id);
+			params.add(payment.d_id);
+			params.add(payment.w_id);
+			params.add(time);
+			params.add(payment.h_amount);
+			params.add(payment.w_name + "    " + payment.d_name);
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			stmt.executeUpdate();
@@ -2044,12 +2487,30 @@ public class jTPCCTData {
 				stmt.setInt(1, orderStatus.w_id);
 				stmt.setInt(2, orderStatus.d_id);
 				stmt.setString(3, orderStatus.c_last);
+				params.clear();
+				params.add(orderStatus.w_id);
+				params.add(orderStatus.d_id);
+				params.add(orderStatus.c_last);
 
-				if(dbType == DB_MYSQL){
-					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-				}
-				else{
-					SQLString += stmt.toString()+";\n";
+				// if(dbType == DB_MYSQL){
+				// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				// }
+				// else{
+				// 	SQLString += stmt.toString()+";\n";
+				// }
+				switch (dbType) {
+					case DB_MYSQL:
+						SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+						break;
+					case DB_POSTGRES:
+						SQLString += stmt.toString()+";\n";
+						break;
+					case DB_ORACLE:
+						String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+						sqlTemplate = buildDebugSql(sqlTemplate,params);
+						SQLString += sqlTemplate+";\n";
+					default:
+						break;
 				}
 
 				rs = stmt.executeQuery();
@@ -2072,12 +2533,30 @@ public class jTPCCTData {
 			stmt.setInt(1, orderStatus.w_id);
 			stmt.setInt(2, orderStatus.d_id);
 			stmt.setInt(3, orderStatus.c_id);
+			params.clear();
+			params.add(orderStatus.w_id);
+			params.add(orderStatus.d_id);
+			params.add(orderStatus.c_id);
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			rs = stmt.executeQuery();
@@ -2100,11 +2579,30 @@ public class jTPCCTData {
 			stmt.setInt(2, orderStatus.d_id);
 			stmt.setInt(3, orderStatus.c_id);
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt.toString()+";\n";
+			// }
+			params.clear();
+			params.add(orderStatus.w_id);
+			params.add(orderStatus.d_id);
+			params.add(orderStatus.c_id);
+
+			switch (dbType) {
+					case DB_MYSQL:
+						SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+						break;
+					case DB_POSTGRES:
+						SQLString += stmt.toString()+";\n";
+						break;
+					case DB_ORACLE:
+						String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+						sqlTemplate = buildDebugSql(sqlTemplate,params);
+						SQLString += sqlTemplate+";\n";
+					default:
+						break;
 			}
 
 			rs = stmt.executeQuery();
@@ -2125,12 +2623,23 @@ public class jTPCCTData {
 			stmt.setInt(1, orderStatus.w_id);
 			stmt.setInt(2, orderStatus.d_id);
 			stmt.setInt(3, orderStatus.o_id);
-
-			if(dbType == DB_MYSQL){
-				SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt.toString()+";\n";
+			params.clear();
+			params.add(orderStatus.w_id);
+			params.add(orderStatus.d_id);
+			params.add(orderStatus.o_id);
+			switch (dbType) {
+					case DB_MYSQL:
+						SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+						break;
+					case DB_POSTGRES:
+						SQLString += stmt.toString()+";\n";
+						break;
+					case DB_ORACLE:
+						String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+						sqlTemplate = buildDebugSql(sqlTemplate,params);
+						SQLString += sqlTemplate+";\n";
+					default:
+						break;
 			}
 
 			rs = stmt.executeQuery();
@@ -2361,16 +2870,35 @@ public class jTPCCTData {
 				
 			}
 
-			stmt = db.stmtStockLevelUpateStock;
+			stmt = db.stmtStockLevelUpateStock;//排序防止死锁。
+			Arrays.sort(stockLevel.s_i_id);
 			for(int i = 0;i<k;i++){
 				stmt.setInt(1, stockLevel.w_id);
 				stmt.setInt(2,stockLevel.s_i_id[i]);
+				params.clear();
+				params.add(stockLevel.w_id);
+				params.add(stockLevel.s_i_id[i]);
 				stmt.addBatch();
-				if(dbType == DB_MYSQL){
-					SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
-				}
-				else{
-					SQLString += stmt.toString()+";\n";
+				// if(dbType == DB_MYSQL){
+				// 	SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+				// }
+				// else{
+				// 	SQLString += stmt.toString()+";\n";
+				// }
+
+				switch (dbType) {
+					case DB_MYSQL:
+						SQLString += stmt.toString().replaceFirst("^\\S+\\s", "")+";\n";
+						break;
+					case DB_POSTGRES:
+						SQLString += stmt.toString()+";\n";
+						break;
+					case DB_ORACLE:
+						String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+						sqlTemplate = buildDebugSql(sqlTemplate,params);
+						SQLString += sqlTemplate+";\n";
+					default:
+						break;
 				}
 			}
 
@@ -2611,7 +3139,7 @@ public class jTPCCTData {
 			for (d_id = 1; d_id <= 10; d_id++) {
 				o_id = -1;
 
-				stmt1 = db.stmtDeliveryBGSelectOldestNewOrder;
+				// stmt1 = db.stmtDeliveryBGSelectOldestNewOrder;
 
 				/*
 				 * Try to find the oldest undelivered order for this
@@ -2619,14 +3147,33 @@ public class jTPCCTData {
 				 * that needs to be reportd.
 				 */
 				while (o_id < 0) {
+					stmt1 = db.stmtDeliveryBGSelectOldestNewOrder;
 					stmt1.setInt(1, deliveryBG.w_id);
 					stmt1.setInt(2, d_id);
+					params.clear();
+					params.add(deliveryBG.w_id);
+					params.add(d_id);
 
-					if(dbType == DB_MYSQL){
-						SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
-					}
-					else{
-						SQLString += stmt1.toString()+";\n";
+					// if(dbType == DB_MYSQL){
+					// 	SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					// }
+					// else{
+					// 	SQLString += stmt1.toString()+";\n";
+					// }
+
+					switch (dbType) {
+						case DB_MYSQL:
+							SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+							break;
+						case DB_POSTGRES:
+							SQLString += stmt1.toString()+";\n";
+							break;
+						case DB_ORACLE:
+							String sqlTemplate = stmt1.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+							sqlTemplate = buildDebugSql(sqlTemplate,params);
+							SQLString += sqlTemplate+";\n";
+						default:
+							break;
 					}
 
 					rs = stmt1.executeQuery();
@@ -2637,6 +3184,30 @@ public class jTPCCTData {
 						o_id = rs.getInt("no_o_id");
 					
 					rs.close();
+					if(dbType == DB_ORACLE){
+						stmt1 = db.stmtDeliveryBGLockOldestNewOrder;
+						stmt1.setInt(1, o_id);
+						stmt1.setInt(2, deliveryBG.w_id);
+						stmt1.setInt(3, d_id);
+						params.clear();
+						params.add(o_id);
+						params.add(deliveryBG.w_id);
+						params.add(d_id);
+
+						String sqlTemplate = stmt1.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+						sqlTemplate = buildDebugSql(sqlTemplate,params);
+						SQLString += sqlTemplate+";\n";
+
+
+						rs = stmt1.executeQuery();
+						if (!rs.next()) {
+							rs.close();
+							break;
+						}
+							o_id = rs.getInt("no_o_id");
+						
+						rs.close();
+					}
 					/*
 					 * This logic only works in SNAPSHOT isolation
 					 * level. Because we select new_order for update,
@@ -2652,17 +3223,29 @@ public class jTPCCTData {
 				deliveryBG.delivered_o_id[d_id - 1] = o_id;
 			}
 			stmt1 = db.stmtDeliveryBGDeleteOldestNewOrder;
+			params.clear();
 			for (d_id = 1; d_id <= 10; d_id++) {
 				stmt1.setInt(d_id * 3 - 2, deliveryBG.w_id);
 				stmt1.setInt(d_id * 3 - 1, d_id);
 				stmt1.setInt(d_id * 3, deliveryBG.delivered_o_id[d_id - 1]);
+				params.add(deliveryBG.w_id);
+				params.add(d_id);
+				params.add(deliveryBG.delivered_o_id[d_id - 1]);
 			}
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt1.toString()+";\n";
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt1.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt1.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 			
 
@@ -2676,35 +3259,74 @@ public class jTPCCTData {
 
 			// Update the ORDER setting the o_carrier_id.
 			stmt1 = db.stmtDeliveryBGUpdateOrder;
+			params.clear();
 			stmt1.setInt(1, deliveryBG.o_carrier_id);
+			params.add(deliveryBG.o_carrier_id);
 			for (d_id = 1; d_id <= 10; d_id++) {
 				stmt1.setInt(d_id * 3 - 1, deliveryBG.w_id);
 				stmt1.setInt(d_id * 3, d_id);
 				stmt1.setInt(d_id * 3 + 1, deliveryBG.delivered_o_id[d_id - 1]);
+				params.add(deliveryBG.w_id);
+				params.add(d_id);
+				params.add(deliveryBG.delivered_o_id[d_id - 1]);
 			}
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt1.toString()+";\n";
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt1.toString()+";\n";
+			// }
+
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt1.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt1.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			stmt1.executeUpdate();
 
 			// Get the o_c_id from the ORDER.
 			stmt1 = db.stmtDeliveryBGSelectOrder;
+			params.clear();
 			for (d_id = 1; d_id <= 10; d_id++) {
 				stmt1.setInt(d_id * 3 - 2, deliveryBG.w_id);
 				stmt1.setInt(d_id * 3 - 1, d_id);
 				stmt1.setInt(d_id * 3, deliveryBG.delivered_o_id[d_id - 1]);
+				params.add(deliveryBG.w_id);
+				params.add(d_id);
+				params.add(deliveryBG.delivered_o_id[d_id - 1]);
 			}
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt1.toString()+";\n";
+			// if(dbType == DB_MYSQL){
+			// 	SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+			// }
+			// else{
+			// 	SQLString += stmt1.toString()+";\n";
+			// }
+
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt1.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt1.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			rs = stmt1.executeQuery();
@@ -2726,18 +3348,32 @@ public class jTPCCTData {
 
 			// Update ORDER_LINE setting the ol_delivery_d.
 			stmt1 = db.stmtDeliveryBGUpdateOrderLine;
-			stmt1.setTimestamp(1, new Timestamp(now));
+			params.clear();
+			Timestamp time_now = new Timestamp(now);
+			stmt1.setTimestamp(1, time_now);
+			params.add(time_now);
 			for (d_id = 1; d_id <= 10; d_id++) {
 				stmt1.setInt(d_id * 3 - 1, deliveryBG.w_id);
 				stmt1.setInt(d_id * 3, d_id);
 				stmt1.setInt(d_id * 3 + 1, deliveryBG.delivered_o_id[d_id - 1]);
+				params.add(deliveryBG.w_id);
+				params.add(d_id);
+				params.add(deliveryBG.delivered_o_id[d_id - 1]);
 			}
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt1.toString()+";\n";
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt1.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt1.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			stmt1.executeUpdate();
@@ -2745,17 +3381,29 @@ public class jTPCCTData {
 			// Select the sum(ol_amount) from ORDER_LINE.
 
 			stmt1 = db.stmtDeliveryBGSelectSumOLAmount;
+			params.clear();
 			for (d_id = 1; d_id <= 10; d_id++) {
 				stmt1.setInt(d_id * 3 - 2, deliveryBG.w_id);
 				stmt1.setInt(d_id * 3 - 1, d_id);
 				stmt1.setInt(d_id * 3, deliveryBG.delivered_o_id[d_id - 1]);
+				params.add(deliveryBG.w_id);
+				params.add(d_id);
+				params.add(deliveryBG.delivered_o_id[d_id - 1]);
 			}
 
-			if(dbType == DB_MYSQL){
-				SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
-			}
-			else{
-				SQLString += stmt1.toString()+";\n";
+			switch (dbType) {
+				case DB_MYSQL:
+					SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+					break;
+				case DB_POSTGRES:
+					SQLString += stmt1.toString()+";\n";
+					break;
+				case DB_ORACLE:
+					String sqlTemplate = stmt1.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+					sqlTemplate = buildDebugSql(sqlTemplate,params);
+					SQLString += sqlTemplate+";\n";
+				default:
+					break;
 			}
 
 			rs = stmt1.executeQuery();
@@ -2785,15 +3433,26 @@ public class jTPCCTData {
 				// }
 				c_id = deliveryBG.delivered_c_id[d_id - 1];
 				stmt1 = db.stmtDeliveryBGUpdateCustomer;
+				params.clear();
 				stmt1.setInt(1, deliveryBG.w_id);
 				stmt1.setInt(2, d_id);
 				stmt1.setInt(3, c_id);
-
-				if(dbType == DB_MYSQL){
-					SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
-				}
-				else{
-					SQLString += stmt1.toString()+";\n";
+				params.add(deliveryBG.w_id);
+				params.add(d_id);
+				params.add(c_id);
+				switch (dbType) {
+					case DB_MYSQL:
+						SQLString += stmt1.toString().replaceFirst("^\\S+\\s", "")+";\n";
+						break;
+					case DB_POSTGRES:
+						SQLString += stmt1.toString()+";\n";
+						break;
+					case DB_ORACLE:
+						String sqlTemplate = stmt1.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
+						sqlTemplate = buildDebugSql(sqlTemplate,params);
+						SQLString += sqlTemplate+";\n";
+					default:
+						break;
 				}
 
 				stmt1.executeUpdate();
@@ -2943,6 +3602,7 @@ public class jTPCCTData {
 				db.setStandardQuery(Query);
 				PreparedStatement stmt = db.stmtStandardQuery;
 				stmt.execute();
+				stmt.close();
 			}
 			Query = Querylist.get(len-1);
 			if(Query.equals("Abort")){
@@ -3033,6 +3693,7 @@ public class jTPCCTData {
 				db.setStandardQuery(Query);
 				PreparedStatement stmt = db.stmtStandardQuery;
 				stmt.execute();
+				stmt.close();
 			}
 			Query = Querylist.get(len-1);
 			if(Query.equals("Abort")){
@@ -3107,6 +3768,43 @@ public class jTPCCTData {
 
 	public int get_priority(){
 		return priority;
+	}
+
+	private String buildDebugSql(String sql,List<Object> params){
+		if (params == null) return sql;
+		for (Object param : params) {
+			String value;
+			if (param == null) {
+				value = "NULL";
+			} else if (param instanceof String || 
+					   param instanceof java.sql.Date || 
+					   param instanceof java.time.LocalDate || 
+					   param instanceof java.sql.Timestamp) {
+				value = "'" + param.toString().replace("'", "''") + "'";
+			} else {
+				value = param.toString();
+			}
+			sql = sql.replaceFirst("\\?", value);
+		}
+		return sql;
+	}
+
+	public void executeOraclePre(jTPCCConnection db){
+		try{
+			PreparedStatement stmt;
+			stmt = db.stmtOracleSetNLSTimeStamp;
+			stmt.executeQuery();
+		}
+		catch (Exception e) {
+			try {
+				db.rollback();
+				this.abort = 1;
+				this.transEnd = System.currentTimeMillis();
+				this.transVal_real = 0;
+			} catch (SQLException se) {
+				se.printStackTrace();
+			}
+		}
 	}
 
 }

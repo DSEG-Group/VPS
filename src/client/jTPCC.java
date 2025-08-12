@@ -181,11 +181,15 @@ public class jTPCC implements jTPCCConfig {
 		String resultDirectory = getProp(ini, "resultDirectory");
 		String osCollectorScript = getProp(ini, "osCollectorScript");
 		
+
 		if(iDB.equals("postgres")){
 			sqlDataJsonPath = "./standard_data/pg_result.json";
 		}
 		else if(iDB.equals("mysql")){
 			sqlDataJsonPath = "./standard_data/mysql_result.json";
+		}
+		else if(iDB.equals("oracle")){
+			sqlDataJsonPath = "./standard_data/oracle_result.json";
 		}
 
 		readJson();
@@ -753,17 +757,19 @@ public class jTPCC implements jTPCCConfig {
 	public void signalTerminalEndedTransaction(String terminalName, String transactionType, long executionTime,
 			String comment, int newOrder, double transVal, int is_abort) {
 		synchronized (counterLock) {
-			transactionCount++;
-			transValCount += transVal;// change 11.13
-			fastNewOrderCounter += newOrder;
-			Long counter = costPerWorkerload.get(transactionType);
-			if (counter == null) {
-				costPerWorkerload.put(transactionType, Long.valueOf(executionTime));
-			} else {
-				costPerWorkerload.put(transactionType, counter + executionTime);
-			}
 			if(is_abort == 1){
 				abortCount++;
+			}
+			else{
+				transactionCount++;
+				transValCount += transVal;// change 11.13
+				fastNewOrderCounter += newOrder;
+				Long counter = costPerWorkerload.get(transactionType);
+				if (counter == null) {
+					costPerWorkerload.put(transactionType, Long.valueOf(executionTime));
+				} else {
+					costPerWorkerload.put(transactionType, counter + executionTime);
+				}
 			}
 		}
 		if(total_txn !=0 && total_txn<=transactionCount){

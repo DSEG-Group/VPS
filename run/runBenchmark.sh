@@ -5,8 +5,8 @@ export PATH=$PATH:$JAVA_HOME/bin
 
 FILES=(
     # "my_mysql.properties"
-    # "my_cockroachdb.properties"
-    "my_postgres.properties"
+    "my_oracle.properties"
+    # "my_postgres.properties"
 )
 
 for file in "${FILES[@]}"; do

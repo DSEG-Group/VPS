@@ -33,8 +33,8 @@ public class preprocessing{
 
     public preprocessing(){
         heap = new Heap();
-        readfilepath = "/home/lyb/vps_benchmark/run/standard_data/pg_result.json";
-        writerfilepath = "/home/lyb/vps_benchmark/run/standard_data/after_sort.json";
+        readfilepath = "/home/lyb/vps_benchmark/run/standard_data/result_or.json";
+        writerfilepath = "/home/lyb/vps_benchmark/run/standard_data/oracle_result.json";
     }
 
     public void main(){

@@ -10,6 +10,9 @@ package client;/*
  */
 
 import java.util.*;
+
+import oracle.jdbc.proxy.annotation.Pre;
+
 import java.sql.*;
 
 public class jTPCCConnection
@@ -41,8 +44,7 @@ public class jTPCCConnection
     public PreparedStatement    stmtPaymentUpdateCustomer;
     public PreparedStatement    stmtPaymentUpdateCustomerWithData;
     public PreparedStatement    stmtPaymentInsertHistory;
-	public PreparedStatement    stmtPaymentSelectNewOrder_mysql;
-	public PreparedStatement    stmtPaymentSelectNewOrder_pg;
+	public PreparedStatement    stmtPaymentSelectNewOrder;
 	public PreparedStatement    stmtPaymentUpdateNewOrder;
 	public PreparedStatement	stmtPaymentSelectOorderData;
 	public PreparedStatement    stmtPaymentSelectOrderLineAmount;
@@ -64,16 +66,19 @@ public class jTPCCConnection
     public PreparedStatement    stmtDeliveryBGSelectSumOLAmount;
     public PreparedStatement    stmtDeliveryBGUpdateOrderLine;
     public PreparedStatement    stmtDeliveryBGUpdateCustomer;
+	public PreparedStatement    stmtDeliveryBGLockOldestNewOrder;
 
 	// public PreparedStatement	stmtTrigerRestockBatch[];
 
 	public PreparedStatement	stmtSetPriorityHigh;
 	public PreparedStatement	stmtSetPriorityLow;
 	public PreparedStatement	stmtSetPriorityNormal;
+	public PreparedStatement  	stmtOracleSetNLSTimeStamp;
 	
 
 
 	public PreparedStatement 	stmtStandardQuery;
+	
 
     public jTPCCConnection(Connection dbConn, int dbType)
 	throws SQLException
@@ -84,6 +89,7 @@ public class jTPCCConnection
 	stmtSetPriorityHigh = dbConn.prepareStatement("SET TRANSACTION PRIORITY HIGH");
 	stmtSetPriorityLow = dbConn.prepareStatement("SET TRANSACTION PRIORITY LOW");
 	stmtSetPriorityNormal = dbConn.prepareStatement("SET TRANSACTION PRIORITY NORMAL");
+	stmtOracleSetNLSTimeStamp = dbConn.prepareStatement("ALTER SESSION SET NLS_TIMESTAMP_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3'");
 
 	// stmtTrigerRestockBatch = new PreparedStatement[16];
 
@@ -135,12 +141,12 @@ public class jTPCCConnection
 		"    SET d_next_o_id = d_next_o_id + 1 \n" +
 		"    WHERE d_w_id = ? AND d_id = ?");
 	stmtNewOrderInsertOrder = dbConn.prepareStatement(
-		"INSERT INTO bmsql_oorder (\n" +
+		"INSERT INTO bmsql_oorder ( \n" +
 		"    o_id, o_d_id, o_w_id, o_c_id, o_entry_d, \n" +
 		"    o_ol_cnt, o_all_local) \n" +
 		"    VALUES (?, ?, ?, ?, ?, ?, ?)");
 	stmtNewOrderInsertNewOrder = dbConn.prepareStatement(
-		"INSERT INTO bmsql_new_order (\n" +
+		"INSERT INTO bmsql_new_order ( \n" +
 		"    no_o_id, no_d_id, no_w_id, no_p_flag) \n" +
 		"    VALUES (?, ?, ?, 0)");
 	stmtNewOrderSelectStock = dbConn.prepareStatement(
@@ -162,7 +168,7 @@ public class jTPCCConnection
 		"        s_remote_cnt = s_remote_cnt + ? \n" +
 		"    WHERE s_w_id = ? AND s_i_id = ?");
 	stmtNewOrderInsertOrderLine = dbConn.prepareStatement(
-		"INSERT INTO bmsql_order_line (\n" +
+		"INSERT INTO bmsql_order_line ( \n" +
 		"    ol_o_id, ol_d_id, ol_w_id, ol_number, \n" +
 		"    ol_i_id, ol_supply_w_id, ol_quantity, \n" +
 		"    ol_amount, ol_dist_info) \n" +
@@ -175,35 +181,53 @@ public class jTPCCConnection
 	);
 	stmtNewOrderUpdateCustomer = dbConn.prepareStatement(
 		"UPDATE bmsql_customer \n" +
-		"    SET c_balance = c_balance + ? , c_new_order_cnt = c_new_order_cnt + 1, c_order_price_cnt = ?\n" +
+		"    SET c_balance = c_balance + ? , c_new_order_cnt = c_new_order_cnt + 1, c_order_price_cnt = ? \n" +
 		"    WHERE c_w_id = ? AND c_d_id = ? AND c_id = ?");
 
 	// PreparedStatements for PAYMENT
-	stmtPaymentSelectNewOrder_mysql = dbConn.prepareStatement(
-		"SELECT no_o_id, no_w_id, no_d_id\n"+
-		"   FROM bmsql_new_order \n"+
-		"   WHERE no_p_flag = 0 \n"+
-		" 	ORDER BY RAND()\n" +
-		"	LIMIT 1");	
+	switch (dbType) {
+		case jTPCCConfig.DB_MYSQL:
+			stmtPaymentSelectNewOrder = dbConn.prepareStatement(
+			"SELECT no_o_id, no_w_id, no_d_id \n"+
+			"   FROM bmsql_new_order \n"+
+			"   WHERE no_p_flag = 0 \n"+
+			" 	ORDER BY RAND() \n" +
+			"	LIMIT 1");	
+			break;
+		case jTPCCConfig.DB_POSTGRES:
+			stmtPaymentSelectNewOrder = dbConn.prepareStatement(
+				"SELECT no_o_id, no_w_id, no_d_id \n"+
+				"   FROM bmsql_new_order \n"+
+				"   WHERE no_p_flag = 0 \n"+
+				" 	ORDER BY RANDOM() \n" +
+				"	LIMIT 1");
+			break;
+		case jTPCCConfig.DB_ORACLE:	
+			stmtPaymentSelectNewOrder = dbConn.prepareStatement(
+				"SELECT no_o_id, no_w_id, no_d_id \n"+
+				"   FROM bmsql_new_order \n"+
+				"   WHERE no_p_flag = 0 \n"+
+				" 	ORDER BY DBMS_RANDOM.VALUE \n" +
+				"	FETCH FIRST 1 ROWS ONLY");
+			break;
+		default:
+			break;
+	}
 
-	stmtPaymentSelectNewOrder_pg = dbConn.prepareStatement(
-		"SELECT no_o_id, no_w_id, no_d_id\n"+
-		"   FROM bmsql_new_order \n"+
-		"   WHERE no_p_flag = 0 \n"+
-		" 	ORDER BY RANDOM()\n" +
-		"	LIMIT 1");	
+
+
 	
 	stmtPaymentUpdateNewOrder = dbConn.prepareStatement(
-		"UPDATE bmsql_new_order\n"+
-		"    SET no_p_flag = 1\n"+
+		"UPDATE bmsql_new_order \n"+
+		"    SET no_p_flag = 1 \n"+
 		"    WHERE no_o_id = ? AND no_w_id = ? AND no_d_id = ?");
 	stmtPaymentSelectOorderData = dbConn.prepareStatement(
-		"SELECT o_c_id\n"+
-		"	FROM bmsql_oorder\n"+
+		"SELECT o_c_id \n"+
+		"	FROM bmsql_oorder \n"+
 		"	WHERE o_id = ? AND o_w_id = ? AND o_d_id = ?");
 	stmtPaymentSelectOrderLineAmount = dbConn.prepareStatement(
-		"SELECT ol_amount\n"+
-		"	FROM bmsql_order_line\n"+
+		"SELECT ol_amount \n"+
+		"	FROM bmsql_order_line \n"+
 		"	WHERE ol_o_id = ? AND ol_w_id = ? AND ol_d_id = ?");
 	stmtPaymentSelectWarehouse = dbConn.prepareStatement(
 		"SELECT w_name, w_street_1, w_street_2, w_city, \n" +
@@ -253,7 +277,7 @@ public class jTPCCConnection
 		"        c_data = ? \n" +
 		"    WHERE c_w_id = ? AND c_d_id = ? AND c_id = ?");
 	stmtPaymentInsertHistory = dbConn.prepareStatement(
-		"INSERT INTO bmsql_history (\n" +
+		"INSERT INTO bmsql_history ( \n" +
 		"    h_c_id, h_c_d_id, h_c_w_id, h_d_id, h_w_id, \n" +
 		"    h_date, h_amount, h_data) \n" +
 		"    VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
@@ -268,11 +292,25 @@ public class jTPCCConnection
 		"SELECT c_first, c_middle, c_last, c_balance \n" +
 		"    FROM bmsql_customer \n" +
 		"    WHERE c_w_id = ? AND c_d_id = ? AND c_id = ?");
-	stmtOrderStatusSelectLastOrder = dbConn.prepareStatement(
-		"SELECT o_id, o_entry_d, o_carrier_id \n" +
-		"    FROM bmsql_oorder \n" +
-		"    WHERE o_w_id = ? AND o_d_id = ? AND o_c_id = ? \n" +
-		"      ORDER BY o_id DESC LIMIT 1");
+	switch (dbType) {
+		case jTPCCConfig.DB_MYSQL:
+		case jTPCCConfig.DB_POSTGRES:
+			stmtOrderStatusSelectLastOrder = dbConn.prepareStatement(
+			"SELECT o_id, o_entry_d, o_carrier_id \n" +
+			"    FROM bmsql_oorder \n" +
+			"    WHERE o_w_id = ? AND o_d_id = ? AND o_c_id = ? \n" +
+			"      ORDER BY o_id DESC LIMIT 1");
+			break;
+		case jTPCCConfig.DB_ORACLE:
+			stmtOrderStatusSelectLastOrder = dbConn.prepareStatement(
+			"SELECT o_id, o_entry_d, o_carrier_id \n" +
+			"    FROM bmsql_oorder \n" +
+			"    WHERE o_w_id = ? AND o_d_id = ? AND o_c_id = ? \n" +
+			"      ORDER BY o_id DESC FETCH FIRST 1 ROWS ONLY");
+		default:
+			break;
+	}
+
 	stmtOrderStatusSelectOrderLine = dbConn.prepareStatement(
 		"SELECT ol_i_id, ol_supply_w_id, ol_quantity, \n" +
 		"       ol_amount, ol_delivery_d \n" +
@@ -283,14 +321,14 @@ public class jTPCCConnection
 	// PreparedStatements for STOCK_LEVEL
 	switch (dbType)
 	{
-		case jTPCCConfig.DB_COCKROACH:
+		case jTPCCConfig.DB_ORACLE:
 	    case jTPCCConfig.DB_POSTGRES:
 	    case jTPCCConfig.DB_MYSQL:
 		// stmtStockLevelSelectLow = dbConn.prepareStatement(
-		//     "SELECT count(*) AS low_stock FROM (\n" +
+		//     "SELECT count(*) AS low_stock FROM ( \n" +
 		//     "    SELECT s_w_id, s_i_id, s_quantity \n" +
 		//     "        FROM bmsql_stock \n" +
-		//     "        WHERE s_w_id = ? AND s_quantity < ? AND s_i_id IN (\n" +
+		//     "        WHERE s_w_id = ? AND s_quantity < ? AND s_i_id IN ( \n" +
 		//     "            SELECT /*+ TIDB_INLJ(bmsql_order_line) */ ol_i_id \n" +
 		//     "                FROM bmsql_district \n" +
 		//     "                JOIN bmsql_order_line ON ol_w_id = d_w_id \n" +
@@ -304,7 +342,7 @@ public class jTPCCConnection
 		stmtStockLevelSelectLow = dbConn.prepareStatement(
 			"    SELECT s_w_id, s_i_id, s_quantity \n" +
 			"        FROM bmsql_stock \n" +
-			"        WHERE s_w_id = ? AND s_quantity < ? AND s_i_id IN (\n" +
+			"        WHERE s_w_id = ? AND s_quantity < ? AND s_i_id IN ( \n" +
 			"            SELECT /*+ TIDB_INLJ(bmsql_order_line) */ ol_i_id \n" +
 			"                FROM bmsql_district \n" +
 			"                JOIN bmsql_order_line ON ol_w_id = d_w_id \n" +
@@ -317,14 +355,14 @@ public class jTPCCConnection
 		stmtStockLevelSelectOrder = dbConn.prepareStatement(
 			"SELECT d_next_o_id \n"+
 			"	FROM bmsql_district \n"+
-			"	WHERE d_w_id = ? AND d_id = ?\n"
+			"	WHERE d_w_id = ? AND d_id = ? \n"
 		);
 
 		stmtStockLevelSelectStockDetail = dbConn.prepareStatement(
 			"SELECT DISTINCT s_w_id, s_i_id, ol_amount, ol_quantity \n"+
 			"	FROM bmsql_order_line, bmsql_stock \n"+
 			"	WHERE ol_w_id = ? AND ol_d_id = ? AND ol_o_id >= ? - 20 \n"+
-			"	AND s_i_id = ol_i_id AND s_quantity < 16\n" 
+			"	AND s_i_id = ol_i_id AND s_quantity < 16 \n" 
 		);
 		break;
 
@@ -332,10 +370,10 @@ public class jTPCCConnection
 
 	    default:
 		// stmtStockLevelSelectLow = dbConn.prepareStatement(
-		//     "SELECT count(*) AS low_stock FROM (\n" +
+		//     "SELECT count(*) AS low_stock FROM ( \n" +
 		//     "    SELECT s_w_id, s_i_id, s_quantity \n" +
 		//     "        FROM bmsql_stock \n" +
-		//     "        WHERE s_w_id = ? AND s_quantity < ? AND s_i_id IN (\n" +
+		//     "        WHERE s_w_id = ? AND s_quantity < ? AND s_i_id IN ( \n" +
 		//     "            SELECT ol_i_id \n" +
 		//     "                FROM bmsql_district \n" +
 		//     "                JOIN bmsql_order_line ON ol_w_id = d_w_id \n" +
@@ -347,10 +385,10 @@ public class jTPCCConnection
 		//     "    )");
 
 		stmtStockLevelSelectLow = dbConn.prepareStatement(
-			"SELECT count(*) AS low_stock FROM (\n" +
+			"SELECT count(*) AS low_stock FROM ( \n" +
 			"    SELECT s_w_id, s_i_id, s_quantity \n" +
 			"        FROM bmsql_stock \n" +
-			"        WHERE s_w_id = ? AND s_quantity < ? AND s_i_id IN (\n" +
+			"        WHERE s_w_id = ? AND s_quantity < ? AND s_i_id IN ( \n" +
 			"            SELECT ol_i_id \n" +
 			"                FROM bmsql_district \n" +
 			"                JOIN bmsql_order_line ON ol_w_id = d_w_id \n" +
@@ -367,53 +405,78 @@ public class jTPCCConnection
 
 	stmtStockLevelUpateStock = dbConn.prepareStatement(
 		"UPDATE bmsql_stock \n" + 
-		"	SET s_quantity = s_quantity + 100 \n" +
+		"	SET s_quantity = s_quantity + 2000 \n" +
 		"	WHERE s_w_id = ? AND s_i_id = ?"
 	);
 
 
 		// PreparedStatements for DELIVERY_BG
-    stmtDeliveryBGSelectOldestNewOrder = dbConn.prepareStatement(
-        "SELECT no_o_id \n" +
-        "    FROM bmsql_new_order \n" +
-        "    WHERE no_w_id = ? AND no_d_id = ? AND no_p_flag = 1\n" +
-        "    ORDER BY no_o_id ASC\n" +
-        "    LIMIT 1\n" +
-        "    FOR UPDATE");
+		switch (dbType) {
+			case jTPCCConfig.DB_MYSQL:
+			case jTPCCConfig.DB_POSTGRES:
+				stmtDeliveryBGSelectOldestNewOrder = dbConn.prepareStatement(
+				"SELECT no_o_id \n" +
+				"    FROM bmsql_new_order \n" +
+				"    WHERE no_w_id = ? AND no_d_id = ? AND no_p_flag = 1 \n" +
+				"    ORDER BY no_o_id ASC \n" +
+				"    LIMIT 1 \n" +
+				"    FOR UPDATE");
+				break;
+			case jTPCCConfig.DB_ORACLE:
+				stmtDeliveryBGSelectOldestNewOrder = dbConn.prepareStatement(	
+				"SELECT no_o_id \n" +
+				"    FROM bmsql_new_order \n" +
+				"    WHERE no_w_id = ? AND no_d_id = ? AND no_p_flag = 1 \n" +
+				"    ORDER BY no_o_id ASC \n" +
+				"    FETCH FIRST 1 ROWS ONLY \n");
+				stmtDeliveryBGLockOldestNewOrder = dbConn.prepareStatement(
+					"SELECT * \n"+
+					"FROM bmsql_new_order \n"+
+					"WHERE no_o_id = ? \n"+
+					"AND no_w_id = ? \n"+
+					"AND no_d_id = ? \n"+
+					"FOR UPDATE"
+				);
+				break;
+		
+			default:
+				break;
+		}
+
 	stmtDeliveryBGDeleteOldestNewOrder = dbConn.prepareStatement(
 		"DELETE FROM bmsql_new_order \n" +
-		"    WHERE (no_w_id,no_d_id,no_o_id) IN (\n" +
-		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?),\n" +
+		"    WHERE (no_w_id,no_d_id,no_o_id) IN ( \n" +
+		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?), \n" +
 		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?))");
 
 	stmtDeliveryBGSelectOrder = dbConn.prepareStatement(
-		"SELECT o_c_id, o_d_id\n" +
+		"SELECT o_c_id, o_d_id \n" +
 		"    FROM bmsql_oorder \n" +
-		"    WHERE (o_w_id,o_d_id,o_id) IN (\n" +
-		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?),\n" +
+		"    WHERE (o_w_id,o_d_id,o_id) IN ( \n" +
+		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?), \n" +
 		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?))");
 
 	stmtDeliveryBGUpdateOrder = dbConn.prepareStatement(
 		"UPDATE bmsql_oorder \n" +
 		"    SET o_carrier_id = ? \n" +
-		"    WHERE (o_w_id,o_d_id,o_id) IN (\n" +
-		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?),\n" +
+		"    WHERE (o_w_id,o_d_id,o_id) IN ( \n" +
+		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?), \n" +
 		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?))");
 
 	stmtDeliveryBGSelectSumOLAmount = dbConn.prepareStatement(
-		"SELECT sum(ol_amount) AS sum_ol_amount, ol_d_id\n" +
+		"SELECT sum(ol_amount) AS sum_ol_amount, ol_d_id \n" +
 		"    FROM bmsql_order_line \n" +
-		"    WHERE (ol_w_id,ol_d_id,ol_o_id) IN (\n" +
-		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?),\n" +
-		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?)\n" +
+		"    WHERE (ol_w_id,ol_d_id,ol_o_id) IN ( \n" +
+		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?), \n" +
+		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?) \n" +
 		") GROUP BY ol_d_id");
 
 
 	stmtDeliveryBGUpdateOrderLine = dbConn.prepareStatement(
 		"UPDATE bmsql_order_line \n" +
 		"    SET ol_delivery_d = ? \n" +
-		"    WHERE (ol_w_id,ol_d_id,ol_o_id) IN (\n" +
-		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?),\n" +
+		"    WHERE (ol_w_id,ol_d_id,ol_o_id) IN ( \n" +
+		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?), \n" +
 		"(?,?,?),(?,?,?),(?,?,?),(?,?,?),(?,?,?))");
 
 	stmtDeliveryBGUpdateCustomer = dbConn.prepareStatement(
