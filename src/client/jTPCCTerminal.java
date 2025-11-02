@@ -83,13 +83,14 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 	NORMAL_PRIO = 1,
 	LOW_PRIO = 0;
 	public boolean value_loss;
+	public int timecounter;
 
     public jTPCCTerminal
       (String terminalName, int terminalWarehouseID, int terminalDistrictID,
        Connection conn, int dbType,
        int numTransactions, boolean terminalWarehouseFixed,
        int[] paymentWeight, int[] orderStatusWeight,
-       int[] deliveryWeight, int[] stockLevelWeight, int numWarehouses, int limPerMin_Terminal, jTPCC parent, boolean standardSQL,boolean isHeap,boolean isReadJson,long changeTime,boolean value_loss) throws SQLException
+       int[] deliveryWeight, int[] stockLevelWeight, int numWarehouses, int limPerMin_Terminal, jTPCC parent, boolean standardSQL,boolean isHeap,boolean isReadJson,long changeTime,boolean value_loss,int timecounter) throws SQLException
     {
 	this.terminalName = terminalName;
 	this.conn = conn;
@@ -97,7 +98,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 	this.stmt = conn.createStatement();
 	this.stmt.setMaxRows(200);
 	this.stmt.setFetchSize(100);
-
+	this.timecounter = timecounter;
 	this.stmt1 = conn.createStatement();
 	this.stmt1.setMaxRows(1);
 
@@ -562,30 +563,32 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 			try{
 				long transactionStart = System.currentTimeMillis();
 				jTPCCTData  term = new jTPCCTData(this); 
-				term.executeStandardQuery(log, SQLString, parent.getSessionStart(), db);
+				term.executeStandardQuery(log, SQLString, parent.getSessionStart(), db, rnd);
 				transVal = term.getTransVal_real();
 				term.traceScreen(log);
 				long transactionEnd = System.currentTimeMillis();
 				String typename = term.getTransType();
 				priority = term.get_priority();
-				latency_queue.add(term.get_transEndTime() - term.get_transGenerateTime());
 				is_abort = term.get_abort();
-				switch(priority){
-					case EX_HIGH_PRIO:
-						E_H_latency_q.add(term.get_transEndTime() - term.get_transGenerateTime());
-						break;
-					case HIGH_PRIO:
-						H_latency_q.add(term.get_transEndTime() - term.get_transGenerateTime());
-						break;
-					case NORMAL_PRIO:
-						N_latency_q.add(term.get_transEndTime() - term.get_transGenerateTime());
-						if(term.get_transEndTime() - term.get_transGenerateTime()<0){
-							System.out.println("error");
-						}
-						break;
-					case LOW_PRIO:
-						L_latency_q.add(term.get_transEndTime() - term.get_transGenerateTime());
-						break;
+				if(is_abort == 0){
+					latency_queue.add(term.get_transEndTime() - term.get_transGenerateTime());
+					switch(priority){
+						case EX_HIGH_PRIO:
+							E_H_latency_q.add(term.get_transEndTime() - term.get_transGenerateTime());
+							break;
+						case HIGH_PRIO:
+							H_latency_q.add(term.get_transEndTime() - term.get_transGenerateTime());
+							break;
+						case NORMAL_PRIO:
+							N_latency_q.add(term.get_transEndTime() - term.get_transGenerateTime());
+							if(term.get_transEndTime() - term.get_transGenerateTime()<0){
+								System.out.println("error");
+							}
+							break;
+						case LOW_PRIO:
+							L_latency_q.add(term.get_transEndTime() - term.get_transGenerateTime());
+							break;
+					}
 				}
 				parent.resultAppend(term,true);
 				int neworder = 0;
@@ -705,31 +708,34 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 					priority = node.getPriority();
 					jTPCCTData term = new jTPCCTData(this);
 					long transactionStart = System.currentTimeMillis();
-					term.executeStandardQuery_Heap(log, sqlString,transType,transVal,generateTime,parent.getSessionStart(),priority,db);
+					term.executeStandardQuery_Heap(log, sqlString,transType,transVal,generateTime,parent.getSessionStart(),priority,db,rnd);
 					transVal = term.getTransVal_real();
 					is_abort = term.get_abort();
 					term.traceScreen(log);
-					latency_queue.add(term.get_transEndTime() - (parent.getSessionStart()+generateTime));
-					long transactionEnd = System.currentTimeMillis();
+					
+					long transactionEnd = term.get_transEndTime();
 					String typename = term.getTransType();
 					parent.resultAppend(term,true);
 					int neworder = 0;
 					if(typename.equals("New-Order")){
 						neworder = 1;
 					}
-					switch(priority){
-						case EX_HIGH_PRIO:
-							E_H_latency_q.add(term.get_transEndTime() - (parent.getSessionStart()+generateTime));
-							break;
-						case HIGH_PRIO:
-							H_latency_q.add(term.get_transEndTime() - (parent.getSessionStart()+generateTime));
-							break;
-						case NORMAL_PRIO:
-							N_latency_q.add(term.get_transEndTime() - (parent.getSessionStart()+generateTime));
-							break;
-						case LOW_PRIO:
-							L_latency_q.add(term.get_transEndTime() - (parent.getSessionStart()+generateTime));
-							break;
+					if(is_abort == 0){
+						latency_queue.add(term.get_transEndTime() - (parent.getSessionStart()+generateTime));
+						switch(priority){
+							case EX_HIGH_PRIO:
+								E_H_latency_q.add(term.get_transEndTime() - (parent.getSessionStart()+generateTime));
+								break;
+							case HIGH_PRIO:
+								H_latency_q.add(term.get_transEndTime() - (parent.getSessionStart()+generateTime));
+								break;
+							case NORMAL_PRIO:
+								N_latency_q.add(term.get_transEndTime() - (parent.getSessionStart()+generateTime));
+								break;
+							case LOW_PRIO:
+								L_latency_q.add(term.get_transEndTime() - (parent.getSessionStart()+generateTime));
+								break;
+						}
 					}
 					parent.signalTerminalEndedTransaction(this.terminalName, typename, transactionEnd - transactionStart, null, neworder,transVal,is_abort);
 					if(stopRunningSignal) stopRunning = true;

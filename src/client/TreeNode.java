@@ -10,7 +10,7 @@ public class TreeNode{
     private long generateTime;
     private int priority;
     
-    TreeNode(String sql, int transType, Double transVal, long generateTime,int priority){
+    public TreeNode(String sql, int transType, Double transVal, long generateTime,int priority){
         this.sqlstring = sql;
         this.transType = transType;
         this.transVal = transVal;

@@ -8,7 +8,7 @@ public class Heap {
     private boolean isAllLoad;
 
 
-    Heap(){
+    public Heap(){
         Tree = new TreeNode[10001];
         size = 0;
         isAllLoad = false;

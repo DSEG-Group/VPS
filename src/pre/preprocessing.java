@@ -14,6 +14,8 @@ import java.util.regex.Pattern;
 import java.text.*;
 import java.util.stream.Stream;
 import org.json.JSONObject;
+import pre.PoissonGenerator;
+import java.util.Random;
 
 public class preprocessing{
     private Heap heap;
@@ -33,8 +35,8 @@ public class preprocessing{
 
     public preprocessing(){
         heap = new Heap();
-        readfilepath = "/home/lyb/vps_benchmark/run/standard_data/result_or.json";
-        writerfilepath = "/home/lyb/vps_benchmark/run/standard_data/oracle_result.json";
+        readfilepath = "/home/lyb/vps_benchmark/run/standard_data/result_mysql_realic_16_64.json";
+        writerfilepath = "/home/lyb/vps_benchmark/run/standard_data/mysql_result.json";
     }
 
     public void main(){
@@ -47,6 +49,9 @@ public class preprocessing{
         }
         String SQLString = "";
         SQLString = readJsonLine();
+        double m2 = 0;
+        double  mean = 0;
+        long count = 0;
         while(SQLString != ""){
             int head = SQLString.indexOf(":")+1;
 			int tail = SQLString.length()-1;
@@ -62,6 +67,10 @@ public class preprocessing{
 			int transType;
 			int priority = Integer.parseInt(PriorityString);
 			double transVal = Double.parseDouble(ValueString);
+            count++;
+            double delta = transVal-mean;
+            mean += delta / count;
+            m2 += delta * (transVal - mean);
 			if(type.equals("New-Order")){
 				transType = TT_NEW_ORDER;
 			}
@@ -81,6 +90,8 @@ public class preprocessing{
 			heap.add(node);
             SQLString = readJsonLine();
         }
+        m2 = m2/(count-1);
+        System.out.printf("mse: %.2f",m2);
         writeJsonLine();
     }
 
@@ -93,16 +104,24 @@ public class preprocessing{
         long generateTime; 
         String WriteBuffer;
         int k = 0;
+        PoissonGenerator poisson = new PoissonGenerator(1.5);
+        double lambda = 128.0 / 60.0; // 每ms平均到达事务数
+        Random rand = new Random();
+        long currentTime = 0L;
         try{
             while(heap.getSize()>0){
-                k = 0;
                 WriteBuffer = "";
                 node = heap.pop();
                 SQLString  = node.getSQL();
                 transVal = node.getTransVal();
                 priority = node.getPriority();
                 transType = node.getTransType();
-                generateTime = node.getGenerateTime();
+
+                double u = rand.nextDouble();
+                long interval = (long)Math.round(-Math.log(1 - u) / lambda);
+                currentTime += interval;
+                generateTime = currentTime;
+
                 WriteBuffer+=k+":\n{";
                 WriteBuffer+="\"sql\":\""+SQLString+"\",\n";
                 WriteBuffer+="\"value\":\""+transVal+"\",\n";

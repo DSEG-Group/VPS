@@ -321,7 +321,6 @@ public class jTPCCConnection
 	// PreparedStatements for STOCK_LEVEL
 	switch (dbType)
 	{
-		case jTPCCConfig.DB_ORACLE:
 	    case jTPCCConfig.DB_POSTGRES:
 	    case jTPCCConfig.DB_MYSQL:
 		// stmtStockLevelSelectLow = dbConn.prepareStatement(
@@ -359,13 +358,42 @@ public class jTPCCConnection
 		);
 
 		stmtStockLevelSelectStockDetail = dbConn.prepareStatement(
-			"SELECT DISTINCT s_w_id, s_i_id, ol_amount, ol_quantity \n"+
+			"SELECT DISTINCT s_w_id, s_i_id, ol_amount, ol_quantity, s_quantity\n"+
 			"	FROM bmsql_order_line, bmsql_stock \n"+
 			"	WHERE ol_w_id = ? AND ol_d_id = ? AND ol_o_id >= ? - 20 \n"+
-			"	AND s_i_id = ol_i_id AND s_quantity < 16 \n" 
+			"	AND s_i_id = ol_i_id\n"+
+			"   ORDER BY s_quantity ASC LIMIT 50 \n"
 		);
 		break;
 
+		case jTPCCConfig.DB_ORACLE:
+			stmtStockLevelSelectLow = dbConn.prepareStatement(
+				"    SELECT s_w_id, s_i_id, s_quantity \n" +
+				"        FROM bmsql_stock \n" +
+				"        WHERE s_w_id = ? AND s_quantity < ? AND s_i_id IN ( \n" +
+				"            SELECT /*+ TIDB_INLJ(bmsql_order_line) */ ol_i_id \n" +
+				"                FROM bmsql_district \n" +
+				"                JOIN bmsql_order_line ON ol_w_id = d_w_id \n" +
+				"                 AND ol_d_id = d_id \n" +
+				"                 AND ol_o_id >= d_next_o_id - 20 \n" +
+				"                 AND ol_o_id < d_next_o_id \n" +
+				"                WHERE d_w_id = ? AND d_id = ? \n" +
+				"        ) \n");
+			
+			stmtStockLevelSelectOrder = dbConn.prepareStatement(
+				"SELECT d_next_o_id \n"+
+				"	FROM bmsql_district \n"+
+				"	WHERE d_w_id = ? AND d_id = ? \n"
+			);
+
+			stmtStockLevelSelectStockDetail = dbConn.prepareStatement(
+				"SELECT DISTINCT s_w_id, s_i_id, ol_amount, ol_quantity, s_quantity \n"+
+				"	FROM bmsql_order_line, bmsql_stock \n"+
+				"	WHERE ol_w_id = ? AND ol_d_id = ? AND ol_o_id >= ? - 20 \n"+
+				"	AND s_i_id = ol_i_id\n"+
+				"   ORDER BY s_quantity ASC FETCH FIRST 50 ROWS ONLY \n"
+			);
+			break;
 		
 
 	    default:

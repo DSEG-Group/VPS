@@ -350,7 +350,7 @@ public class LoadDataWorker implements Runnable {
 						}
 						break;
 					case Uniform:
-						i_price = ((double) rnd.nextLong(1000, 50000)) / 100.0;
+						i_price = ((double) rnd.nextLong(1000, 10000)) / 100.0;
 						break;
 					case Gaussian:
 						i_price = (rnd.generateGaussianInRange(245,1,10,500) );
@@ -487,7 +487,7 @@ public class LoadDataWorker implements Runnable {
 			} else {
 				stmtStock.setInt(1, w_id);
 				stmtStock.setInt(2, s_i_id);
-				stmtStock.setInt(3, rnd.nextInt(10, 100));
+				stmtStock.setInt(3, rnd.nextInt(16, 2000));
 				stmtStock.setInt(4, 0);
 				stmtStock.setInt(5, 0);
 				stmtStock.setInt(6, 0);

@@ -4,8 +4,8 @@ export JAVA_HOME=/home/dseg/Desktop/lyb/tpcc/JDK8
 export PATH=$PATH:$JAVA_HOME/bin
 
 FILES=(
-    # "my_mysql.properties"
-    "my_oracle.properties"
+    "my_mysql.properties"
+    # "my_oracle.properties"
     # "my_postgres.properties"
 )
 

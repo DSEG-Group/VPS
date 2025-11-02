@@ -37,7 +37,7 @@ public class jTPCC implements jTPCCConfig {
 	private jTPCCTerminal[] terminals;
 	private String[] terminalNames;
 	private boolean terminalsBlockingExit = false;
-	private long terminalsStarted = 0, sessionCount = 0, transactionCount = 0, transValCount = 0;// change 11.13
+	private long terminalsStarted = 0, sessionCount = 0, transactionCount = 0, transValCount = 0, transValLoss = 0;// change 11.13
 	private long abortCount = 0;
 	private Object counterLock = new Object();
 
@@ -56,6 +56,7 @@ public class jTPCC implements jTPCCConfig {
 	private jTPCCRandom rnd;
 	private OSCollector osCollector = null;
 	private HashMap<String, Long> costPerWorkerload;
+	private HashMap<String, Long> countPerWorkerload;
 
 	private int numTerminals = -1;
 	private Vector<Long>latency_queue = new Vector<>();
@@ -86,6 +87,7 @@ public class jTPCC implements jTPCCConfig {
 	private long lastEpochValue = 0;
 	private long lastEpochTransCount = 0;
 	private boolean value_loss = false;
+	private int timeCounter = 0;
 
 	private Vector<Double> epochVpmTotalRecords = new Vector<>();
 	private Vector<Double> epochTpmTotalRecords = new Vector<>();
@@ -106,6 +108,7 @@ public class jTPCC implements jTPCCConfig {
 	private String getProp(Properties p, String pName) {
 		String prop = p.getProperty(pName);
 		costPerWorkerload = new HashMap<String, Long>();
+		countPerWorkerload = new HashMap<String, Long>();
 		log.info("Term-00, " + pName + "=" + prop);
 		return (prop);
 	}
@@ -174,6 +177,7 @@ public class jTPCC implements jTPCCConfig {
 		String iTotal_txn = getProp(ini, "total_txn");
 		String iLimitValue = getProp(ini, "limitValue");
 		String iValueLoss = getProp(ini,"value_loss");
+		String iTimeCounter = getProp(ini,"timeCounter");
 
 
 
@@ -474,6 +478,7 @@ public class jTPCC implements jTPCCConfig {
 					
 					total_txn = Integer.parseInt(iTotal_txn);
 					limitValue = Integer.parseInt(iLimitValue);
+					timeCounter = Integer.parseInt(iTimeCounter);
 
 
 					if(IntIsHeap == 1&& IntStandardSQL == 1){
@@ -587,7 +592,7 @@ public class jTPCC implements jTPCCConfig {
 									conn, dbType,
 									transactionsPerTerminal, terminalWarehouseFixed,
 									paymentWeightValue, orderStatusWeightValue,
-									deliveryWeightValue, stockLevelWeightValue, numWarehouses, limPerMin_Terminal, this,standardSQL,isHeap,false,changeTime,value_loss);
+									deliveryWeightValue, stockLevelWeightValue, numWarehouses, limPerMin_Terminal, this,standardSQL,isHeap,false,changeTime,value_loss,timeCounter);
 
 							terminals[i] = terminal;
 							terminalNames[i] = terminalName;
@@ -600,7 +605,7 @@ public class jTPCC implements jTPCCConfig {
 										conn, dbType,
 										transactionsPerTerminal, terminalWarehouseFixed,
 										paymentWeightValue, orderStatusWeightValue,
-										deliveryWeightValue, stockLevelWeightValue, numWarehouses, limPerMin_Terminal, this,standardSQL,false,true,changeTime,value_loss);
+										deliveryWeightValue, stockLevelWeightValue, numWarehouses, limPerMin_Terminal, this,standardSQL,false,true,changeTime,value_loss,timeCounter);
 
 								terminals[i] = terminal;
 								terminalNames[i] = terminalName;
@@ -759,16 +764,20 @@ public class jTPCC implements jTPCCConfig {
 		synchronized (counterLock) {
 			if(is_abort == 1){
 				abortCount++;
+				transValLoss +=transVal;
 			}
 			else{
 				transactionCount++;
 				transValCount += transVal;// change 11.13
 				fastNewOrderCounter += newOrder;
 				Long counter = costPerWorkerload.get(transactionType);
+				Long quantity = countPerWorkerload.get(transactionType);
 				if (counter == null) {
 					costPerWorkerload.put(transactionType, Long.valueOf(executionTime));
+					countPerWorkerload.put(transactionType, Long.valueOf(1));
 				} else {
-					costPerWorkerload.put(transactionType, counter + executionTime);
+					costPerWorkerload.put(transactionType, (counter + executionTime)/2);
+					countPerWorkerload.put(transactionType, quantity+1);
 				}
 			}
 		}
@@ -817,7 +826,7 @@ public class jTPCC implements jTPCCConfig {
 		double vpmTotal = (6000000 * transValCount / (currTimeMillis - sessionStartTimestamp)) / 100.0;// change 11.13
 		double vpsTotal = vpmTotal/60;
 		double tpsTotal = tpmTotal/60;
-		double abortRate = (double)abortCount/transactionCount;
+		double abortRate = (double)abortCount/(transactionCount+abortCount);
 		System.out.println("");
 
 
@@ -854,6 +863,7 @@ public class jTPCC implements jTPCCConfig {
 		log.info("Term-00, Session End       = " + sessionEnd);
 		log.info("Term-00, Session Excute = "+(sessionEndTimestamp-sessionStartTimestamp)+" ms");
 		log.info("Term-00, Value Count = " + transValCount);// change 11.13
+		log.info("Term-00, Value Loss = " + transValLoss);
 		log.info("Term-00, Transaction Count = " + (transactionCount - 1));
 		log.info("Term-00, Transaction abort rate = " + abortRate);
 		if(queue_lenth!=0){
@@ -886,7 +896,9 @@ public class jTPCC implements jTPCCConfig {
 		}
 		for (String key : costPerWorkerload.keySet()) {
 			Long value = costPerWorkerload.get(key);
+			Long value_2 = countPerWorkerload.get(key);
 			log.info("executeTime[" + key + "]=" + value.toString());
+			log.info("counter[" + key + "]=" + value_2.toString());
 		}
 
 

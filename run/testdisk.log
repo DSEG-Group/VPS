@@ -1,0 +1,96 @@
+
+
+Fri Oct 10 17:14:37 2025
+Command line: TestDisk
+
+TestDisk 7.1, Data Recovery Utility, July 2019
+Christophe GRENIER <grenier@cgsecurity.org>
+https://www.cgsecurity.org
+OS: Linux, kernel 5.15.0-139-generic (#149~20.04.1-Ubuntu SMP Wed Apr 16 08:29:56 UTC 2025) x86_64
+Compiler: GCC 9.2
+ext2fs lib: 1.45.5, ntfs lib: libntfs-3g, reiserfs lib: none, ewf lib: none, curses lib: ncurses 6.1
+/dev/sda: LBA, LBA48 support
+/dev/sda: size       7814037168 sectors
+/dev/sda: user_max   7814037168 sectors
+/dev/sdb: LBA, LBA48 support
+/dev/sdb: size       7814037168 sectors
+/dev/sdb: user_max   7814037168 sectors
+Warning: can't get size for Disk /dev/mapper/control - 0 B - 0 sectors, sector size=512
+Warning: can't get size for Disk /dev/loop12 - 0 B - 0 sectors, sector size=512
+Hard disk list
+Disk /dev/sda - 4000 GB / 3726 GiB - CHS 486401 255 63, sector size=512 - ST4000NM0035-1V4107, S/N:ZC1E6A2B, FW:TN05
+Disk /dev/sdb - 4000 GB / 3726 GiB - CHS 486401 255 63, sector size=512 - ST4000NM0035-1V4107, S/N:ZC1E67AQ, FW:TN05
+Disk /dev/loop0 - 4096 B - 8 sectors (RO), sector size=512
+Disk /dev/loop1 - 66 MB / 63 MiB - 130592 sectors (RO), sector size=512
+Disk /dev/loop10 - 77 MB / 73 MiB - 151392 sectors (RO), sector size=512
+Disk /dev/loop11 - 96 MB / 91 MiB - 187776 sectors (RO), sector size=512
+Disk /dev/loop2 - 51 MB / 49 MiB - 100952 sectors (RO), sector size=512
+Disk /dev/loop3 - 363 MB / 346 MiB - 709280 sectors (RO), sector size=512
+Disk /dev/loop4 - 12 MB / 12 MiB - 24984 sectors (RO), sector size=512
+Disk /dev/loop5 - 366 MB / 349 MiB - 716176 sectors (RO), sector size=512
+Disk /dev/loop6 - 77 MB / 73 MiB - 151384 sectors (RO), sector size=512
+Disk /dev/loop7 - 53 MB / 50 MiB - 103976 sectors (RO), sector size=512
+Disk /dev/loop8 - 48 MB / 45 MiB - 94064 sectors (RO), sector size=512
+Disk /dev/loop9 - 66 MB / 63 MiB - 130608 sectors (RO), sector size=512
+Disk /dev/nvme0n1 - 1000 GB / 931 GiB - CHS 953869 64 32, sector size=512
+
+Partition table type (auto): EFI GPT
+Disk /dev/nvme0n1 - 1000 GB / 931 GiB
+Partition table type: EFI GPT
+
+Interface Advanced
+hdr_size=92
+hdr_lba_self=1
+hdr_lba_alt=1953525167 (expected 1953525167)
+hdr_lba_start=34
+hdr_lba_end=1953525134
+hdr_lba_table=2
+hdr_entries=128
+hdr_entsz=128
+ 1 P EFI System                  2048    1050623    1048576 [EFI System Partition]
+ 2 P Linux filesys. data      1050624 1953523711 1952473088
+
+Interface Advanced
+hdr_size=92
+hdr_lba_self=1
+hdr_lba_alt=1953525167 (expected 1953525167)
+hdr_lba_start=34
+hdr_lba_end=1953525134
+hdr_lba_table=2
+hdr_entries=128
+hdr_entsz=128
+ 1 P EFI System                  2048    1050623    1048576 [EFI System Partition]
+ 2 P Linux filesys. data      1050624 1953523711 1952473088
+gpt_change_part_type
+Change partition type:
+ 2 P Linux filesys. data      1050624 1953523711 1952473088
+Change partition type:
+ 2 P Unknown                  1050624 1953523711 1952473088
+Partition table type (auto): EFI GPT
+Disk /dev/nvme0n1 - 1000 GB / 931 GiB
+Partition table type: Intel
+
+Interface Advanced
+Geometry from i386 MBR: head=256 sector=63
+check_part_i386 1 type EE: no test
+ 1 P EFI GPT                  0   0  2 953869  45 16 1953525167
+Incomplete image created.
+Incomplete image created.
+Partition table type (auto): EFI GPT
+Disk /dev/nvme0n1 - 1000 GB / 931 GiB
+Partition table type: EFI GPT
+
+Interface Advanced
+hdr_size=92
+hdr_lba_self=1
+hdr_lba_alt=1953525167 (expected 1953525167)
+hdr_lba_start=34
+hdr_lba_end=1953525134
+hdr_lba_table=2
+hdr_entries=128
+hdr_entsz=128
+ 1 P EFI System                  2048    1050623    1048576 [EFI System Partition]
+ 2 P Linux filesys. data      1050624 1953523711 1952473088
+Image created successfully.
+
+TestDisk exited normally.

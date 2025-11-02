@@ -58,6 +58,7 @@ public class jTPCCTData {
 	public jTPCCTData term_right;
 	public int tree_height;
 	private int abort = 0;
+	private double loss_v = 0;
 	private int extreme_high_value_rate = 1;
 	private int high_value_rate = 19;
 	private int normal_value_rate = 40;
@@ -98,6 +99,7 @@ public class jTPCCTData {
 	public jTPCCTData(jTPCCTerminal parent){
 		this.parent = parent;
 		value_loss = parent.value_loss;
+		timecounter = parent.timecounter;
 	}
 
 	public void setNumWarehouses(int num) {
@@ -307,7 +309,7 @@ public class jTPCCTData {
 	}
 
 	public long get_latency(){
-		return transEnd-transStart;
+		return transEnd-transGeneratime;
 	}
 
 	/*
@@ -492,6 +494,7 @@ public class jTPCCTData {
 					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
 					sqlTemplate = buildDebugSql(sqlTemplate,params);
 					SQLString += sqlTemplate+";\n";
+					break;
 				default:
 					break;
 			}
@@ -555,6 +558,7 @@ public class jTPCCTData {
 					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
 					sqlTemplate = buildDebugSql(sqlTemplate,params);
 					SQLString += sqlTemplate+";\n";
+					break;
 				default:
 					break;
 			}
@@ -620,6 +624,7 @@ public class jTPCCTData {
 					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
 					sqlTemplate = buildDebugSql(sqlTemplate,params);
 					SQLString += sqlTemplate+";\n";
+					break;
 				default:
 					break;
 			}
@@ -680,6 +685,7 @@ public class jTPCCTData {
 					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
 					sqlTemplate = buildDebugSql(sqlTemplate,params);
 					SQLString += sqlTemplate+";\n";
+					break;
 				default:
 					break;
 			}
@@ -1186,13 +1192,13 @@ public class jTPCCTData {
 			SQLString += "COMMIT;\",\n";
 
 
-			if(transVal_real>=5647.5){
+			if(transVal_real>=30000){
 				this.priority = EX_HIGH_PRIO;
 			}
-			else if(transVal_real>=3765){
+			else if(transVal_real>=5000){
 				this.priority = HIGH_PRIO;
 			}
-			else if(transVal_real>=1882.5){
+			else if(transVal_real>=1000){
 				this.priority = NORMAL_PRIO;
 			}
 			else{
@@ -1438,6 +1444,7 @@ public class jTPCCTData {
 					String sqlTemplate = stmt.unwrap(oracle.jdbc.internal.OraclePreparedStatement.class).getOriginalSql();
 					sqlTemplate = buildDebugSql(sqlTemplate,params);
 					SQLString += sqlTemplate+";\n";
+					break;
 				default:
 					break;
 			}
@@ -1661,10 +1668,10 @@ public class jTPCCTData {
 			
 			double alpha = 0.9;
 			transVal_real = alpha*payment.h_amount;
-			if(transVal_real>=50000){
+			if(transVal_real>=30000){
 				this.priority = EX_HIGH_PRIO;
 			}
-			else if(transVal_real>=10000){
+			else if(transVal_real>=5000){
 				this.priority = HIGH_PRIO;
 			}
 			else if(transVal_real>=1000){
@@ -2672,6 +2679,18 @@ public class jTPCCTData {
 			transVal_real = alpha*transVal_real;
 			db.commit();
 			SQLString += "Commit;\",\n";
+			if(transVal_real>=30000){
+				this.priority = EX_HIGH_PRIO;
+			}
+			else if(transVal_real>=5000){
+				this.priority = HIGH_PRIO;
+			}
+			else if(transVal_real>=1000){
+				this.priority = NORMAL_PRIO;
+			}
+			else{
+				this.priority = LOW_PRIO;
+			}
 		} catch (SQLException se) {
 			log.error("Unexpected SQLException in ORDER_STATUS");
 			for (SQLException x = se; x != null; x = x.getNextException())
@@ -2848,13 +2867,17 @@ public class jTPCCTData {
 						isContainHotItem = true;
 					}
 				}
+				if(k == 0){
+					rs.close();
+					throw new SQLException("No Item Need to ");
+				}
 				double alpha = 0.9;
 				if(isContainHotItem){
-					alpha = 1.0;
+					alpha = 0.7;
 					transVal_real = transVal_real*alpha;//大致测量该事务价值
 				}
 				else{
-					alpha = 0.8;
+					alpha = 0.5;
 					transVal_real = transVal_real*alpha;
 				}
 
@@ -2871,7 +2894,7 @@ public class jTPCCTData {
 			}
 
 			stmt = db.stmtStockLevelUpateStock;//排序防止死锁。
-			Arrays.sort(stockLevel.s_i_id);
+			Arrays.sort(stockLevel.s_i_id,0,k);
 			for(int i = 0;i<k;i++){
 				stmt.setInt(1, stockLevel.w_id);
 				stmt.setInt(2,stockLevel.s_i_id[i]);
@@ -2924,7 +2947,18 @@ public class jTPCCTData {
 
 			db.commit();
 			SQLString += "Commit;\",\n";
-			priority = 1;
+			if(transVal_real>=30000){
+				this.priority = EX_HIGH_PRIO;
+			}
+			else if(transVal_real>=5000){
+				this.priority = HIGH_PRIO;
+			}
+			else if(transVal_real>=1000){
+				this.priority = NORMAL_PRIO;
+			}
+			else{
+				this.priority = LOW_PRIO;
+			}
 		} catch (SQLException se) {
 			log.error("Unexpected SQLException in STOCK_LEVEL");
 			for (SQLException x = se; x != null; x = x.getNextException())
@@ -3476,6 +3510,18 @@ public class jTPCCTData {
 
 			db.commit();
 			SQLString += "COMMIT;\",\n";
+			if(transVal_real>=30000){
+				this.priority = EX_HIGH_PRIO;
+			}
+			else if(transVal_real>=5000){
+				this.priority = HIGH_PRIO;
+			}
+			else if(transVal_real>=1000){
+				this.priority = NORMAL_PRIO;
+			}
+			else{
+				this.priority = LOW_PRIO;
+			}
 		} catch (SQLException se) {
 			log.error("Unexpected SQLException in DELIVERY_BG");
 			for (SQLException x = se; x != null; x = x.getNextException())
@@ -3584,12 +3630,51 @@ public class jTPCCTData {
 	}
 
 
-	public void executeStandardQuery(Logger log, String JsonString,long sessionStart,jTPCCConnection db)throws Exception{
+	public void executeStandardQuery(Logger log, String JsonString,long sessionStart,jTPCCConnection db,jTPCCRandom rnd)throws Exception{
 		this.sessionTimestamp = sessionStart;
 		transactionFromJson(JsonString);
 		long currentTimestamp = System.currentTimeMillis();
 		while(currentTimestamp<transGeneratime){
 			currentTimestamp = System.currentTimeMillis();
+		}
+
+		double w = 0;
+		switch (this.transType) {
+			case TT_NEW_ORDER:
+				w = 0.008;
+				break;
+			case TT_PAYMENT:
+				w = 0.017;
+				break;
+			case TT_STOCK_LEVEL:
+				w = 0.007;
+				break;
+			case TT_ORDER_STATUS:
+				w = 0.003;
+				break;
+			case TT_DELIVERY:
+				w = 0.005;
+				break;
+			default:
+				break;
+		}
+		if(timecounter == 1){
+			timeCounterNow = System.currentTimeMillis();
+			timeDelta = timeCounterNow - this.transGeneratime;
+			if (timeDelta > 200) {
+				abortPoss = (timeDelta - 200) / (0.1 * 200) * w;
+				if (abortPoss > 1) {
+					abortPoss = 1;
+				}
+				int poss = rnd.nextInt(1, 100);
+				if (poss < 100 * abortPoss) {
+					abort = 1;
+					loss_v+=this.transVal_real;
+					// db.rollback();
+					// SQLString += "Abort;\",\n";
+					return;
+				}
+			}
 		}
 		int len = Querylist.size();
 		String Query = "";
@@ -3603,6 +3688,24 @@ public class jTPCCTData {
 				PreparedStatement stmt = db.stmtStandardQuery;
 				stmt.execute();
 				stmt.close();
+				if(timecounter == 1){
+					timeCounterNow = System.currentTimeMillis();
+					timeDelta = timeCounterNow - this.transGeneratime;
+					if (timeDelta > 200) {
+						abortPoss = (timeDelta - 200) / (0.1 * 200) * w;
+						if (abortPoss > 1) {
+							abortPoss = 1;
+						}
+						int poss = rnd.nextInt(1, 100);
+						if (poss < 100 * abortPoss) {
+							abort = 1;
+							loss_v+=this.transVal_real;
+							db.rollback();
+							SQLString += "Abort;\",\n";
+							return;
+						}
+					}
+				}
 			}
 			Query = Querylist.get(len-1);
 			if(Query.equals("Abort")){
@@ -3672,7 +3775,7 @@ public class jTPCCTData {
 	}
 
 
-	public void executeStandardQuery_Heap(Logger log, String SQLString,int transType,double transVal,long generateTime, long sessionTimestamp,int priority,jTPCCConnection db)throws Exception{
+	public void executeStandardQuery_Heap(Logger log, String SQLString,int transType,double transVal,long generateTime, long sessionTimestamp,int priority,jTPCCConnection db, jTPCCRandom rnd)throws Exception{
 		this.transType = transType;
 		this.transVal_real = transVal;
 		this.sessionTimestamp = sessionTimestamp;
@@ -3685,65 +3788,139 @@ public class jTPCCTData {
 		}
 		int len = Querylist.size();
 		String Query = "";
-		try {
-			this.transStart = System.currentTimeMillis();
-			this.transDue = this.transStart;
-			for(int i  = 0;i<len -2 ;i++){
-				Query = Querylist.get(i);
-				db.setStandardQuery(Query);
-				PreparedStatement stmt = db.stmtStandardQuery;
-				stmt.execute();
-				stmt.close();
-			}
-			Query = Querylist.get(len-1);
-			if(Query.equals("Abort")){
-				this.abort = 1;
-				transVal = 0;
-				db.rollback();
-				this.transEnd = System.currentTimeMillis();
-			}
-			else{
-				db.commit();
-				this.transEnd = System.currentTimeMillis();
-				if(value_loss){
-					timeCounterNow = System.currentTimeMillis();
-						timeDelta = timeCounterNow - this.transGeneratime;
-						if(transType == TT_NEW_ORDER || transType == TT_PAYMENT){
-							if(transType == TT_NEW_ORDER){
-								typeWeight = 0.008;
-							}
-							if(transType == TT_PAYMENT){
-								typeWeight = 0.017;
-							}
-							if (timeDelta > 200) {
-								double valloss = transVal_real*(timeDelta - 200) / (0.1 * 200) * typeWeight;
-								if(valloss<transVal_real){
-									transVal_real = transVal_real-transVal_real*(timeDelta - 200) / (0.1 * 200) * typeWeight;
-								}
-								else{
-									transVal_real = 0;
-								}
-							}
-						}
+
+		double w = 0;
+		switch (this.transType) {
+			case TT_NEW_ORDER:
+				w = 0.008;
+				break;
+			case TT_PAYMENT:
+				w = 0.017;
+				break;
+			case TT_STOCK_LEVEL:
+				w = 0.007;
+				break;
+			case TT_ORDER_STATUS:
+				w = 0.003;
+				break;
+			case TT_DELIVERY:
+				w = 0.005;
+				break;
+			default:
+				break;
+		}
+		if(timecounter == 1){
+			timeCounterNow = System.currentTimeMillis();
+			timeDelta = timeCounterNow - this.transGeneratime;
+			if (timeDelta > 200) {
+				abortPoss = (timeDelta - 200) / (0.1 * 200) * w;
+				if (abortPoss > 1) {
+					abortPoss = 1;
+				}
+				int poss = rnd.nextInt(1, 100);
+				if (poss < 100 * abortPoss) {
+					abort = 1;
+					loss_v+=this.loss_v;
+					// db.rollback();
+					// SQLString += "Abort;\",\n";
+
+					return;
 				}
 			}
-		}catch (SQLException se) {
-			log.error("Unexpected SQLException");
-			log.error(Query);
-			for (SQLException x = se; x != null; x = x.getNextException())
-				log.error(x.getMessage());
-			se.printStackTrace();
-
+		}
+		int retry = 0;
+		boolean success = false;
+		int maxRetry = 5;
+		while(!success && retry < maxRetry){
 			try {
-				db.rollback();
-				this.abort = 1;
-				this.transEnd = System.currentTimeMillis();
-				this.transVal_real = 0;
-			} catch (SQLException se2) {
-				throw new Exception("Unexpected SQLException on rollback: " +
-						se2.getMessage());
-			}
-			} catch (Exception e) {
+				this.transStart = System.currentTimeMillis();
+				this.transDue = this.transStart;
+				for(int i  = 0;i<len -2 ;i++){
+					Query = Querylist.get(i);
+					db.setStandardQuery(Query);
+					PreparedStatement stmt = db.stmtStandardQuery;
+					stmt.execute();
+					stmt.close();
+					if(timecounter == 1){
+						timeCounterNow = System.currentTimeMillis();
+						timeDelta = timeCounterNow - this.transGeneratime;
+						if (timeDelta > 200) {
+							abortPoss = (timeDelta - 200) / (0.1 * 200) * w;
+							if (abortPoss > 1) {
+								abortPoss = 1;
+							}
+							int poss = rnd.nextInt(1, 100);
+							if (poss < 100 * abortPoss) {
+								abort = 1;
+								loss_v+=this.transVal_real;
+								db.rollback();
+								SQLString += "Abort;\",\n";
+								return;
+							}
+						}
+					}
+				}
+				Query = Querylist.get(len-1);
+				if(Query.equals("Abort")){
+					this.abort = 1;
+					transVal = 0;
+					db.rollback();
+					this.transEnd = System.currentTimeMillis();
+				}
+				else{
+					db.commit();
+					this.transEnd = System.currentTimeMillis();
+					if(value_loss){
+						timeCounterNow = System.currentTimeMillis();
+							timeDelta = timeCounterNow - this.transGeneratime;
+							if(transType == TT_NEW_ORDER || transType == TT_PAYMENT){
+								if(transType == TT_NEW_ORDER){
+									typeWeight = 0.008;
+								}
+								if(transType == TT_PAYMENT){
+									typeWeight = 0.017;
+								}
+								if (timeDelta > 200) {
+									double valloss = transVal_real*(timeDelta - 200) / (0.1 * 200) * typeWeight;
+									if(valloss<transVal_real){
+										transVal_real = transVal_real-transVal_real*(timeDelta - 200) / (0.1 * 200) * typeWeight;
+									}
+									else{
+										transVal_real = 0;
+									}
+								}
+							}
+					}
+				}
+				success = true;
+			}catch (SQLException se) {
+				log.error("Unexpected SQLException");
+				log.error(Query);
+				for (SQLException x = se; x != null; x = x.getNextException())
+					log.error(x.getMessage());
+				se.printStackTrace();
+
+				String sqlState = se.getSQLState();
+				int errorCode = se.getErrorCode();
+				if("40001".equals(sqlState) || "40P01".equals(sqlState) || errorCode == 1213){
+					retry++;
+					System.err.println("Deadlock detected (" + sqlState + "), retrying... attempt " + retry);
+				}else{
+					this.abort = 1;
+					success = true;
+				}	
+
+
+				try {
+					db.rollback();
+					this.transEnd = System.currentTimeMillis();
+					this.transVal_real = 0;
+				} catch (SQLException se2) {
+					throw new Exception("Unexpected SQLException on rollback: " +
+							se2.getMessage());
+				}
+			} 
+			catch (Exception e) {
 				try {
 					db.rollback();
 					this.abort = 1;
@@ -3756,6 +3933,7 @@ public class jTPCCTData {
 				throw new Exception(Query + "\nUnexpected Exception :" +
 				e.getMessage());
 			}
+		}
 
 	}
 	public long get_transEndTime(){
@@ -3805,6 +3983,10 @@ public class jTPCCTData {
 				se.printStackTrace();
 			}
 		}
+	}
+
+	public double get_loss_v(){
+		return this.loss_v;
 	}
 
 }
