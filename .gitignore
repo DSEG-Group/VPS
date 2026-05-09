@@ -41,4 +41,4 @@ run/*notimeout
 run/standard_data/*.sql
 run/standard_data/*.json
 *.png
-src/NLP/model/*.pt
+run/bmsql.sql
