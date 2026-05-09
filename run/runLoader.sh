@@ -10,4 +10,4 @@ shift
 
 setCP || exit 1
 
-java -cp "$myCP" -Dprop=$PROPS LoadData.LoadData $*
+java -cp "/SSD00/lyb/test/VPS/build:/SSD00/lyb/test/VPS/lib/postgres/*" -Dprop=$PROPS LoadData.LoadData $*

@@ -29,9 +29,9 @@ public class caculate_offline_vps {
 
     public final static int TT_NEW_ORDER = 0,
 							TT_PAYMENT = 1,
-							TT_STOCK_LEVEL = 2,
+							TT_STOCK_LEVEL = 4,
 							TT_DELIVERY = 3,
-							TT_ORDER_STATUS = 4;
+							TT_ORDER_STATUS = 2;
 
     public static void main(String args []){
         new caculate_offline_vps();

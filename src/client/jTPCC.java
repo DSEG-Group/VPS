@@ -37,14 +37,17 @@ public class jTPCC implements jTPCCConfig {
 	private jTPCCTerminal[] terminals;
 	private String[] terminalNames;
 	private boolean terminalsBlockingExit = false;
-	private long terminalsStarted = 0, sessionCount = 0, transactionCount = 0, transValCount = 0, transValLoss = 0;// change 11.13
+	private long terminalsStarted = 0, sessionCount = 0, transactionCount = 0;// change 11.13
+	private double transValLoss = 0,transValCount = 0;
 	private long abortCount = 0;
 	private Object counterLock = new Object();
+	private double NewOrderAvgValue = 0;
+	private double PayAvgValue = 0;
 
 	private long newOrderCounter = 0, sessionStartTimestamp, sessionEndTimestamp, sessionNextTimestamp = 0,nextChangeTime = 0,
 			sessionNextKounter = 0;
 	private long epochStartTime, epochEndTime;
-	private long sessionEndTargetTime = -1, fastNewOrderCounter, recentTpmC = 0, recentTpmTotal = 0;
+	private long sessionEndTargetTime = -1, fastNewOrderCounter, recentTpmC = 0, recentTpmTotal = 0,notPayCounter = 0,PayCounter = 0;
 	private boolean signalTerminalsRequestEndSent = false, databaseDriverLoaded = false;
 
 	private FileOutputStream fileOutputStream;
@@ -84,7 +87,7 @@ public class jTPCC implements jTPCCConfig {
 
 	private int total_txn;
 
-	private long lastEpochValue = 0;
+	private double lastEpochValue = 0;
 	private long lastEpochTransCount = 0;
 	private boolean value_loss = false;
 	private int timeCounter = 0;
@@ -93,6 +96,7 @@ public class jTPCC implements jTPCCConfig {
 	private Vector<Double> epochTpmTotalRecords = new Vector<>();
 	
 	private LRUCache<Integer,Double> hot_item = new LRUCache<>(20);
+	private Set<Double> errorOrder = new HashSet<>();
 
 
 	static {
@@ -586,6 +590,7 @@ public class jTPCC implements jTPCCConfig {
 						printMessage("Creating database connection for " + terminalName + "...");
 						conn = DriverManager.getConnection(database, dbProps);
 						conn.setAutoCommit(false);
+						initPayCounterPayAvgValue(conn,dbType);
 						if(i < numTerminals){
 							jTPCCTerminal terminal = new jTPCCTerminal(terminalName, terminalWarehouseID,
 									terminalDistrictID,
@@ -760,7 +765,7 @@ public class jTPCC implements jTPCCConfig {
 	}
 
 	public void signalTerminalEndedTransaction(String terminalName, String transactionType, long executionTime,
-			String comment, int newOrder, double transVal, int is_abort) {
+			String comment, int newOrder, double transVal, int is_abort,double OrderVal,int DeliveryOrderCount) {
 		synchronized (counterLock) {
 			if(is_abort == 1){
 				abortCount++;
@@ -770,6 +775,43 @@ public class jTPCC implements jTPCCConfig {
 				transactionCount++;
 				transValCount += transVal;// change 11.13
 				fastNewOrderCounter += newOrder;
+				notPayCounter += newOrder;
+				if(newOrder == 1){
+					if(!errorOrder.contains(OrderVal)){
+						NewOrderAvgValue = (NewOrderAvgValue*(notPayCounter-1)+OrderVal)/notPayCounter;
+					}
+					else{
+						notPayCounter--;
+					}
+					// NewOrderAvgValue = (NewOrderAvgValue*(notPayCounter-1)+OrderVal)/notPayCounter;
+					// if(notPayCounter>1){
+					// 	NewOrderAvgValue = NewOrderAvgValue/2;
+					// }
+				}
+				if(transactionType == "Payment"){
+						double old_value = NewOrderAvgValue;
+						NewOrderAvgValue = old_value*notPayCounter/(notPayCounter-1) - OrderVal/(notPayCounter-1);
+						if(NewOrderAvgValue<0){
+							NewOrderAvgValue = old_value;
+							errorOrder.add(OrderVal);
+						}
+						else{
+							notPayCounter--;
+						}
+
+					PayCounter ++;
+					PayAvgValue = (PayAvgValue*(PayCounter-1)+OrderVal)/PayCounter;
+				}
+				if(transactionType  == "Delivery"){
+					if(PayCounter-DeliveryOrderCount > 0){
+						PayAvgValue = PayAvgValue/(PayCounter-DeliveryOrderCount)*PayCounter - OrderVal*DeliveryOrderCount/(PayCounter-DeliveryOrderCount);
+						PayCounter-=DeliveryOrderCount;
+					}
+					else{
+						PayAvgValue=0;
+						PayCounter=0;
+					}
+				}
 				Long counter = costPerWorkerload.get(transactionType);
 				Long quantity = countPerWorkerload.get(transactionType);
 				if (counter == null) {
@@ -941,7 +983,7 @@ public class jTPCC implements jTPCCConfig {
 				if(currTimeMillis>nextChangeTime){
 					epochEndTime = currTimeMillis;
 					long epochTransCount = transactionCount - lastEpochTransCount;
-					long epochValueCount = transValCount - lastEpochValue;
+					double epochValueCount = transValCount - lastEpochValue;
 
 					long deltaTime = epochEndTime-epochStartTime;
 					lastEpochTransCount = transactionCount;
@@ -1032,6 +1074,30 @@ public class jTPCC implements jTPCCConfig {
 		return this.hot_item.containsKey(i_id);
 	}
 
+	public long  getPaycounter(){
+		synchronized (counterLock){
+			return PayCounter;
+		}
+	}
+	
+	public double getPayAvgValue(){
+		synchronized (counterLock){
+			return PayAvgValue;
+		}
+	}
+
+	public double getNewOrderAvgValue(){
+		synchronized (counterLock){
+			return NewOrderAvgValue;
+		}
+	}
+
+	public long getNoPayCount(){
+		synchronized (counterLock){
+			return notPayCounter;
+		}
+	}
+
 	synchronized public void updateHotItem(int i_id)throws Exception{
 		if(this.hot_item.containsKey(i_id)){
 			this.hot_item.get(i_id);
@@ -1040,5 +1106,21 @@ public class jTPCC implements jTPCCConfig {
 			this.hot_item.put(i_id, 0.0);
 			
 		}
+	}
+
+	private void initPayCounterPayAvgValue(Connection connect,int dbType)throws Exception{
+		jTPCCConnection db = new jTPCCConnection(connect, dbType);
+		PreparedStatement stmt;
+		ResultSet rs;
+		stmt = db.stmtInitSelectStatusOfOl;
+		rs = stmt.executeQuery();
+		if (!rs.next()) {
+			rs.close();
+			return;
+		}
+		PayAvgValue = rs.getDouble("avg");
+		PayCounter = rs.getInt("count");
+		db.commit();
+		return;
 	}
 }

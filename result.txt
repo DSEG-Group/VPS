@@ -1,0 +1,5 @@
+Total Transactions: 1021
+Total Transaction Value: 121789.98
+TPS: 1.7016666666666666E-5
+VPS: 0.002029833
+AvgPreTime: 0

@@ -13,7 +13,7 @@ DB="$(grep '^db=' $PROPS | sed -e 's/^db=//')"
 
 if [ "$DB" = "postgres" ] ; then
     createdb -h 0.0.0.0 -p 11452 -U postgres -W bmsql
-    psql -h 0.0.0.0 -p 11452 -U postgres -d bmsql -f ./standard_data/standardDatabase_pg_distribution_realic.sql
+    psql -h 0.0.0.0 -p 11452 -U postgres -d bmsql -f ./bmsql.sql
 fi
 if [ "$DB" = "mysql" ] ; then
     mysql -h 0.0.0.0 -P 4397 -u root -p123456 -e "create database bmsql;" 

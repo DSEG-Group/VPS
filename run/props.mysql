@@ -2,7 +2,7 @@ db=mysql
 driver=com.mysql.jdbc.Driver
 conn=jdbc:mysql://localhost:4000/tpcc?useSSL=false&useServerPrepStmts=true&useConfigs=maxPerformance&rewriteBatchedStatements=true&cachePrepStmts=true&prepStmtCacheSize=1000&prepStmtCacheSqlLimit=2048
 user=root
-password=
+password=123456
 
 warehouses=1
 loadWorkers=4

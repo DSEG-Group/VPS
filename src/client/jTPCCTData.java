@@ -7,6 +7,7 @@ package client;/*
 				*/
 
 import org.apache.log4j.*;
+import server.VPSServer;
 
 import java.util.*;
 import java.sql.*;
@@ -24,6 +25,8 @@ public class jTPCCTData {
 	private		  boolean value_loss = true;
 	private       jTPCCTerminal parent;
 	private 	  List<Object> params =new ArrayList<>();
+	private 	  double transOrderVal = 0;
+	private 	  int DeliveryOrderCount = 0;
 
 	public final static int DB_UNKNOWN = 0,
 			DB_FIREBIRD = 1,
@@ -41,8 +44,8 @@ public class jTPCCTData {
 	public final static int TT_NEW_ORDER = 0,
 			TT_PAYMENT = 1,
 			TT_ORDER_STATUS = 2,
-			TT_STOCK_LEVEL = 3,
-			TT_DELIVERY = 4,
+			TT_STOCK_LEVEL = 4,
+			TT_DELIVERY = 3,
 			TT_DELIVERY_BG = 5,
 			TT_NONE = 6,
 			TT_DONE = 7,
@@ -65,6 +68,7 @@ public class jTPCCTData {
 	private int low_value_rate = 40;
 	private int priority = 0;
 	private String SQLString = "";
+	private String inputdata = "";
 
 	private int transType;
 	private long transDue;
@@ -95,11 +99,24 @@ public class jTPCCTData {
 	private Formatter resultFmt = new Formatter(resultSB);
 
 	private Vector<String> Querylist = new Vector<String>();
+	private double NewOrderAvgValue;
+	private long notPayCounter;
+	private double PayAvgValue;
+	private long PayCounter;
+
 
 	public jTPCCTData(jTPCCTerminal parent){
 		this.parent = parent;
 		value_loss = parent.value_loss;
 		timecounter = parent.timecounter;
+	}
+
+	public jTPCCTData(){
+		this.newOrder = new NewOrderData();
+		this.payment = new PaymentData();
+		this.orderStatus = new OrderStatusData();
+		this.stockLevel = new StockLevelData();
+		this.delivery = new DeliveryData();
 	}
 
 	public void setNumWarehouses(int num) {
@@ -122,9 +139,13 @@ public class jTPCCTData {
 		return terminalDistrict;
 	}
 
-	public void execute(Logger log, jTPCCConnection db, jTPCCRandom rnd)
+	public void execute(Logger log, jTPCCConnection db, jTPCCRandom rnd,long notPayCounter,double NewOrderAvgValue,long PayCounter,double PayAvgValue)
 			throws Exception {
 		transStart = System.currentTimeMillis();
+		this.notPayCounter = notPayCounter;
+		this.NewOrderAvgValue = NewOrderAvgValue;
+		this.PayAvgValue = PayAvgValue;
+		this.PayCounter = PayCounter;
 		if (transDue == 0)
 			transDue = transStart;
 
@@ -282,23 +303,29 @@ public class jTPCCTData {
 				SQLString += "\"generateTime\":\""+(this.transGeneratime-sessionStart)+"\",\n";
 				switch (transType) {
 					case TT_NEW_ORDER:
-						SQLString += "\"transType\":\"New-Order\"},\n";
+						SQLString += "\"transType\":\"New-Order\",\n";
 						break;
 					case TT_PAYMENT:
-						SQLString += "\"transType\":\"Payment\"},\n";
+						SQLString += "\"transType\":\"Payment\",\n";
 						break;
 					case TT_DELIVERY_BG:
-						SQLString += "\"transType\":\"Delivery\"},\n";
+						SQLString += "\"transType\":\"Delivery\",\n";
 						break;
 					case TT_ORDER_STATUS:
-						SQLString += "\"transType\":\"Order-Status\"},\n";
+						SQLString += "\"transType\":\"Order-Status\",\n";
 						break;
 					case TT_STOCK_LEVEL:
-						SQLString += "\"transType\":\"Stock-Level\"},\n";
+						SQLString += "\"transType\":\"Stock-Level\",\n";
 						break;
 					default:
 						throw new Exception("Unknown transType " + transType);
 				}
+				SQLString += "\"input\":\""+ inputdata+"\",\n";
+				SQLString += "\"context\":\""+
+							String.valueOf(this.notPayCounter)+","+
+							String.valueOf(this.NewOrderAvgValue)+","+
+							String.valueOf(this.PayCounter)+","+
+							String.valueOf(this.PayAvgValue)+"\"},\n";
 			}
 			return SQLString;
 		}
@@ -345,6 +372,7 @@ public class jTPCCTData {
 		int value_level = rnd.nextInt(1, 100);
 
 		transVal_real = 0;
+		newOrder.o_ol_cnt = o_ol_cnt;
 		while (i < o_ol_cnt) // 2.4.1.5 调整order的分布。
 		{
 			if (value_level <= this.extreme_high_value_rate) {
@@ -392,7 +420,7 @@ public class jTPCCTData {
 
 	}
 
-	private void executeNewOrder(Logger log, jTPCCConnection db, jTPCCRandom rnd)
+	public void executeNewOrder(Logger log, jTPCCConnection db, jTPCCRandom rnd)
 			throws Exception {
 		PreparedStatement stmt;
 		PreparedStatement insertOrderLineBatch;
@@ -404,6 +432,15 @@ public class jTPCCTData {
 		int ol_cnt;
 		double total_amount = 0.0;
 		int dbType;
+		transOrderVal = 0;
+		inputdata = String.valueOf(newOrder.w_id)+"," + 
+					String.valueOf(newOrder.d_id)+"," +
+					String.valueOf(newOrder.c_id)+",0";
+		// for(int i = 0;i<newOrder.o_ol_cnt;i++){
+		// 	inputdata = ","+String.valueOf(newOrder.ol_i_id[i])+
+		// 				","+String.valueOf(newOrder.i_price[i])+
+		// 				","+String.valueOf(newOrder.ol_quantity[i]);
+		// }
 
 		int ol_seq[] = new int[15];
 				
@@ -935,6 +972,7 @@ public class jTPCCTData {
 						if (item != null) {
 							newOrder.i_price[seq] = item.i_price;
 							newOrder.ol_amount[seq] = item.i_price * newOrder.ol_quantity[seq];
+							VPSServer.updateHotItem(item.i_id, item.i_price);	
 							if (item.i_data.contains("ORIGINAL") &&
 									rs.getString("s_data").contains("ORIGINAL"))
 								newOrder.brand_generic[seq] = new String("B");
@@ -958,11 +996,13 @@ public class jTPCCTData {
 							" not fount");
 				}
 
-				parent.parent.updateHotItem(newOrder.ol_i_id[seq]);
+				// parent.parent.updateHotItem(newOrder.ol_i_id[seq]);
+				
 
 				total_amount += newOrder.ol_amount[seq] *
 						(1.0 - newOrder.c_discount) *
 						(1.0 + newOrder.w_tax + newOrder.d_tax);
+				transOrderVal += newOrder.ol_amount[seq];
 				stmt = db.stmtNewOrderUpdateStock;
 				params.clear();
 				// Update the STOCK row.
@@ -1076,14 +1116,14 @@ public class jTPCCTData {
 
 				insertOrderLineBatch.addBatch();
 			}
-			if(flag == 1){
-				parent.set_next_txn_type(TT_TRIGER_RESTOCK,reStock_item);
-				SQLString += "Abort;\",\n";//商品不够，则进行下一个事务执行补货。
-				insertOrderLineBatch.clearBatch();
-				db.rollback();
-				abort = 1;
-				return;	
-			}
+			// if(flag == 1){
+			// 	parent.set_next_txn_type(TT_TRIGER_RESTOCK,reStock_item);
+			// 	SQLString += "Abort;\",\n";//商品不够，则进行下一个事务执行补货。
+			// 	insertOrderLineBatch.clearBatch();
+			// 	db.rollback();
+			// 	abort = 1;
+			// 	return;	
+			// }
 
 			// All done ... execute the batches.
 			insertOrderLineBatch.executeBatch();
@@ -1130,7 +1170,6 @@ public class jTPCCTData {
 			double beta = 0.3;
 			transVal_real = alpha*total_amount+beta*c_order_price;//把顾客过去的订单历史也考虑在内。
 			c_order_price = (newOrder.total_amount + c_order_price)/2;
-			
 
 
 			newOrder.execution_status = new String("Order placed");
@@ -1189,6 +1228,10 @@ public class jTPCCTData {
 					}
 			}
 			db.commit();
+			for(int i = 0;i<newOrder.o_ol_cnt;i++){
+				inputdata += ","+String.valueOf(newOrder.ol_i_id[i])+
+							","+String.valueOf(newOrder.ol_quantity[i]);
+			}
 			SQLString += "COMMIT;\",\n";
 
 
@@ -1387,7 +1430,7 @@ public class jTPCCTData {
 		payment.h_amount = 0;
 	}
 
-	private void executePayment(Logger log, jTPCCConnection db, jTPCCRandom rnd)
+	public void executePayment(Logger log, jTPCCConnection db, jTPCCRandom rnd)
 			throws Exception {
 		PreparedStatement stmt;
 		ResultSet rs;
@@ -1663,10 +1706,11 @@ public class jTPCCTData {
 			}
 
 			while(rs.next()){
-				payment.h_amount+=rs.getInt("ol_amount");
+				payment.h_amount+=rs.getDouble("ol_amount");
 			}
 			
 			double alpha = 0.9;
+			transOrderVal = payment.h_amount;
 			transVal_real = alpha*payment.h_amount;
 			if(transVal_real>=30000){
 				this.priority = EX_HIGH_PRIO;
@@ -2470,7 +2514,7 @@ public class jTPCCTData {
 		}
 	}
 
-	private void executeOrderStatus(Logger log, jTPCCConnection db)
+	public void executeOrderStatus(Logger log, jTPCCConnection db)
 			throws Exception {
 		PreparedStatement stmt;
 		ResultSet rs;
@@ -2479,6 +2523,10 @@ public class jTPCCTData {
 		int dbType;
 		dbType = db.getdbtype();
 		transVal_real = 0;
+		inputdata = String.valueOf(orderStatus.w_id)+","
+					+String.valueOf(orderStatus.d_id)+","
+					+String.valueOf(orderStatus.c_id)+","
+					+orderStatus.c_last;
 
 		try {
 			if(with_prio == 1){
@@ -2811,11 +2859,13 @@ public class jTPCCTData {
 		stockLevel.reStock = reStock;
 	}
 
-	private void executeStockLevel(Logger log, jTPCCConnection db)
+	public void executeStockLevel(Logger log, jTPCCConnection db)
 			throws Exception {
 		PreparedStatement stmt;
 		ResultSet rs;
 		transVal_real = 0;
+		inputdata = String.valueOf(stockLevel.w_id) + ","
+					+ String.valueOf(stockLevel.d_id);
 		int dbType = db.getdbtype();
 		try {
 			if(with_prio == 1){
@@ -2833,7 +2883,7 @@ public class jTPCCTData {
 				}
 			}
 			int k = 0;
-			if(stockLevel.reStock.isEmpty()){//管理员触发补货事务
+			if(stockLevel.reStock.isEmpty()||stockLevel.reStock == null){//管理员触发补货事务
 				stmt = db.stmtStockLevelSelectOrder;
 				stmt.setInt(1, stockLevel.w_id);
 				stmt.setInt(2, stockLevel.d_id);
@@ -2863,7 +2913,10 @@ public class jTPCCTData {
 					stockLevel.ol_quantity = rs.getInt("ol_quantity");
 					double price = (stockLevel.ol_amount / stockLevel.ol_quantity);//计算货物单价
 					transVal_real += price;
-					if(parent.parent.isHotItem(stockLevel.s_i_id[k-1])){
+					// if(parent.parent.isHotItem(stockLevel.s_i_id[k-1])){
+					// 	isContainHotItem = true;
+					// }
+					if(VPSServer.isHotItem(stockLevel.s_i_id[k-1])){
 						isContainHotItem = true;
 					}
 				}
@@ -3044,7 +3097,7 @@ public class jTPCCTData {
 		transVal_real = 0;
 	}
 
-	private void executeDelivery(Logger log, jTPCCConnection db) {
+	public void executeDelivery(Logger log, jTPCCConnection db) {
 		long now = System.currentTimeMillis();
 
 		/*
@@ -3055,7 +3108,8 @@ public class jTPCCTData {
 		 * (DeliveryBG). We store that TData object in the delivery
 		 * part for the caller to pick up and queue/execute.
 		 */
-		delivery.deliveryBG = new jTPCCTData(this.parent);
+		// delivery.deliveryBG = new jTPCCTData(this.parent);
+		delivery.deliveryBG = new jTPCCTData();
 		delivery.deliveryBG.generateDeliveryBG(delivery.w_id, now,
 				new Timestamp(now).toString(), this);
 		delivery.execution_status = new String("Delivery has been queued");
@@ -3147,7 +3201,7 @@ public class jTPCCTData {
 		}
 	}
 
-	private void executeDeliveryBG(Logger log, jTPCCConnection db)
+	public void executeDeliveryBG(Logger log, jTPCCConnection db)
 			throws Exception {
 		PreparedStatement stmt1;
 		PreparedStatement stmt2;
@@ -3160,6 +3214,8 @@ public class jTPCCTData {
 		long now = System.currentTimeMillis();
 		transStart = System.currentTimeMillis();
 		int dbType = db.getdbtype();
+		inputdata = String.valueOf(deliveryBG.w_id)+","
+					+ "0,0";
 		try {
 			if(with_prio == 1){
 				if(dbType == DB_COCKROACH){
@@ -3449,6 +3505,8 @@ public class jTPCCTData {
 				k++;
 			}
 			transVal_real = transVal_real/k;
+			transOrderVal = transVal_real;
+			DeliveryOrderCount = k;
 			transVal_real = transVal_real *0.5;//快递事务权重为0.5
 			rs.close();
 
@@ -3987,6 +4045,46 @@ public class jTPCCTData {
 
 	public double get_loss_v(){
 		return this.loss_v;
+	}
+
+
+	public void setNewOrderData(int w_id, int d_id, int c_id, int o_ol_cnt, int[] ol_supply_w_id, int[] ol_i_id, int[] ol_quantity){
+		this.newOrder.w_id = w_id;
+		this.newOrder.d_id = d_id;
+		this.newOrder.c_id = c_id;
+		this.newOrder.o_ol_cnt = o_ol_cnt;
+		this.newOrder.ol_supply_w_id = ol_supply_w_id;
+		this.newOrder.ol_i_id = ol_i_id;
+		this.transType = TT_NEW_ORDER;
+	}
+
+	public void setOrderStatusData(int w_id, int d_id, int c_id, String c_last){
+		this.orderStatus.w_id = w_id;
+		this.orderStatus.d_id = d_id;
+		this.orderStatus.c_id = c_id;
+		this.orderStatus.c_last = c_last;
+		this.transType = TT_ORDER_STATUS;
+	}
+
+	public void setStockLevelData(int w_id, int d_id, int threshold){
+		this.stockLevel.w_id = w_id;
+		this.stockLevel.d_id = d_id;
+		this.stockLevel.threshold = threshold;
+		this.transType = TT_STOCK_LEVEL;
+	}
+
+	public void setDeliveryData(int w_id, int o_carrier_id){
+		this.delivery.w_id = w_id;
+		this.delivery.o_carrier_id = o_carrier_id;
+		this.transType = TT_DELIVERY;
+	}
+
+	public double get_transOrderVal(){
+		return this.transOrderVal;
+	}
+
+	public int get_deliveryOrderCount(){
+		return this.DeliveryOrderCount;
 	}
 
 }

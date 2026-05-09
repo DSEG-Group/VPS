@@ -1,0 +1,15 @@
+              List of relations
+ Schema |       Name       | Type  |  Owner   
+--------+------------------+-------+----------
+ public | bmsql_config     | table | postgres
+ public | bmsql_customer   | table | postgres
+ public | bmsql_district   | table | postgres
+ public | bmsql_history    | table | postgres
+ public | bmsql_item       | table | postgres
+ public | bmsql_new_order  | table | postgres
+ public | bmsql_oorder     | table | postgres
+ public | bmsql_order_line | table | postgres
+ public | bmsql_stock      | table | postgres
+ public | bmsql_warehouse  | table | postgres
+(10 rows)
+

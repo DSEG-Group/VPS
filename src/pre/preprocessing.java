@@ -27,8 +27,8 @@ public class preprocessing{
     public final static int TT_NEW_ORDER = 0,
 	TT_PAYMENT = 1,
 	TT_ORDER_STATUS = 2,
-	TT_STOCK_LEVEL = 3,
-	TT_DELIVERY = 4,
+	TT_STOCK_LEVEL = 4,
+	TT_DELIVERY = 3,
 	TT_DELIVERY_BG = 5,
 	TT_NONE = 6,
 	TT_DONE = 7;

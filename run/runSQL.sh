@@ -51,4 +51,4 @@ echo "# Loading SQL file ${SQL_FILE}"
 echo "# ------------------------------------------------------------"
 myOPTS="-Dprop=$1"
 myOPTS="$myOPTS -DcommandFile=${SQL_FILE}"
-java -cp "$myCP" $myOPTS jdbc.ExecJDBC
+java -cp "/SSD00/lyb/test/VPS/build:/SSD00/lyb/test/VPS/lib/postgres/*" $myOPTS jdbc.ExecJDBC

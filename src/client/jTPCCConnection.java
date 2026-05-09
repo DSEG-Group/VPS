@@ -74,6 +74,8 @@ public class jTPCCConnection
 	public PreparedStatement	stmtSetPriorityLow;
 	public PreparedStatement	stmtSetPriorityNormal;
 	public PreparedStatement  	stmtOracleSetNLSTimeStamp;
+
+	public PreparedStatement 	stmtInitSelectStatusOfOl;
 	
 
 
@@ -511,6 +513,14 @@ public class jTPCCConnection
 		"UPDATE bmsql_customer \n" +
 		"    SET c_delivery_cnt = c_delivery_cnt + 1 \n" +
 		"    WHERE c_w_id = ? AND c_d_id = ? AND c_id = ?");
+
+	stmtInitSelectStatusOfOl = dbConn.prepareStatement(
+		"select avg(o_amount),count(o_amount) \n"+
+		"         from ( \n"+
+		"              select sum(ol_amount) as o_amount \n"+
+		"			   from bmsql_order_line \n"+
+		"			   group by ol_w_id,ol_d_id,ol_o_id)t"
+	);
     
 	}
 

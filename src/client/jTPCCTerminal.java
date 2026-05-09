@@ -16,6 +16,8 @@ import java.util.*;
 import javax.swing.*;
 import org.json.JSONObject;
 
+import com.mysql.cj.x.protobuf.MysqlxCrud.Order;
+
 public class jTPCCTerminal implements jTPCCConfig, Runnable
 {
     private static org.apache.log4j.Logger log = Logger.getLogger(jTPCCTerminal.class);
@@ -33,8 +35,11 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
     private jTPCCRandom rnd;
 	private long changeTime;
 	private int next_transaction_type = TT_RANDOM;
+	private double OrderVal;
+	private int DeliveryOrderCount = 0;
 
 	private double transVal;//change 11.13
+	private double transOrderVal;
 	private int is_abort;
     private int transactionCount = 1;
     private int numTransactions;
@@ -69,8 +74,8 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 	public final static int TT_NEW_ORDER = 0,
 	TT_PAYMENT = 1,
 	TT_ORDER_STATUS = 2,
-	TT_STOCK_LEVEL = 3,
-	TT_DELIVERY = 4,
+	TT_STOCK_LEVEL = 4,
+	TT_DELIVERY = 3,
 	TT_DELIVERY_BG = 5,
 	TT_NONE = 6,
 	TT_DONE = 7,
@@ -131,24 +136,31 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 
     public void run()
     {
-	if(dbType == parent.DB_ORACLE){
-		jTPCCTData  term = new jTPCCTData(this);
-		term.executeOraclePre(db);
-	}
-	if(!isReadJson){
-		if(!standardSQL){
-			if(isHeap){
-				executeHeapSQL();
-			}else{
-				executeTransactions(numTransactions);
+	try{
+		if(dbType == parent.DB_ORACLE){
+			jTPCCTData  term = new jTPCCTData(this);
+			term.executeOraclePre(db);
+		}
+		if(!isReadJson){
+			if(!standardSQL){
+				if(isHeap){
+					executeHeapSQL();
+				}else{
+					executeTransactions(numTransactions);
+				}
+			}
+			else{
+					executeStandardTransactions();
 			}
 		}
 		else{
-				executeStandardTransactions();
+			HeapReadJson();
 		}
 	}
-	else{
-		HeapReadJson();
+	catch(Exception e){
+		printMessage("");
+	    printMessage("An error occurred!");
+	    logException(e);
 	}
 
 
@@ -181,7 +193,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 	printMessage("Finishing current transaction before exit...");
     }
 
-    private void executeTransactions(int numTransactions)
+    private void executeTransactions(int numTransactions) throws Exception
     {
 	boolean stopRunning = false;
 
@@ -260,7 +272,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 			{
 				term.generateStockLevel(log, rnd, 0,reStock_item);
 				term.traceScreen(log);
-				term.execute(log, db, rnd);
+				term.execute(log, db, rnd,parent.getNoPayCount(),parent.getNewOrderAvgValue(),parent.getPaycounter(),parent.getPayAvgValue());
 				transVal = term.getTransVal_real();
 				is_abort = term.get_abort();
 				latency_queue.add(term.get_latency());
@@ -290,7 +302,8 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		{
 		    term.generatePayment(log, rnd, 0);
 		    term.traceScreen(log);
-		    term.execute(log, db, rnd);
+		    term.execute(log, db, rnd,parent.getNoPayCount(),parent.getNewOrderAvgValue(),parent.getPaycounter(),parent.getPayAvgValue());
+			OrderVal = term.get_transOrderVal();
 			transVal = term.getTransVal_real();
 			is_abort = term.get_abort();
 			latency_queue.add(term.get_latency());
@@ -323,7 +336,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		{
 		    term.generateStockLevel(log, rnd, 0,reStock_item);
 		    term.traceScreen(log);
-		    term.execute(log, db, rnd);
+		    term.execute(log, db, rnd,parent.getNoPayCount(),parent.getNewOrderAvgValue(),parent.getPaycounter(),parent.getPayAvgValue());
 			transVal = term.getTransVal_real();
 			is_abort = term.get_abort();
 			latency_queue.add(term.get_latency());
@@ -352,7 +365,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		{
 		    term.generateOrderStatus(log, rnd, 0);
 		    term.traceScreen(log);
-		    term.execute(log, db, rnd);
+		    term.execute(log, db, rnd,parent.getNoPayCount(),parent.getNewOrderAvgValue(),parent.getPaycounter(),parent.getPayAvgValue());
 			transVal = term.getTransVal_real();
 			is_abort = term.get_abort();
 			latency_queue.add(term.get_latency());
@@ -381,8 +394,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		{
 		    term.generateDelivery(log, rnd, 0);
 		    term.traceScreen(log);
-		    term.execute(log, db, rnd);
-			transVal = term.getTransVal_real();
+		    term.execute(log, db, rnd,parent.getNoPayCount(),parent.getNewOrderAvgValue(),parent.getPaycounter(),parent.getPayAvgValue());
 			is_abort = term.get_abort();
 			latency_queue.add(term.get_latency());
 		    parent.resultAppend(term,false);
@@ -395,8 +407,11 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		     */
 		    jTPCCTData  bg = term.getDeliveryBG();
 		    bg.traceScreen(log);
-		    bg.execute(log, db, rnd);
-		    parent.resultAppend(bg,false);
+		    bg.execute(log, db, rnd,parent.getNoPayCount(),parent.getNewOrderAvgValue(),parent.getPaycounter(),parent.getPayAvgValue());
+		    OrderVal = term.get_transOrderVal();
+			DeliveryOrderCount = term.get_deliveryOrderCount();
+			transVal = term.getTransVal_real();
+			parent.resultAppend(bg,false);
 		    bg.traceScreen(log);
 
 		    skippedDeliveries = bg.getSkippedDeliveries();
@@ -423,9 +438,10 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 		{
 		    term.generateNewOrder(log, rnd, 0);
 		    term.traceScreen(log);
-		    term.execute(log, db, rnd);
+		    term.execute(log, db, rnd,parent.getNoPayCount(),parent.getNewOrderAvgValue(),parent.getPaycounter(),parent.getPayAvgValue());
 			transVal = term.getTransVal_real();
 			is_abort = term.get_abort();
+			OrderVal = term.get_transOrderVal();
 			latency_queue.add(term.get_latency());
 		    parent.resultAppend(term,false);
 		    term.traceScreen(log);
@@ -449,12 +465,14 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 
 	    if(!transactionTypeName.equals("Delivery"))
 	    {
-		parent.signalTerminalEndedTransaction(this.terminalName, transactionTypeName, transactionEnd - transactionStart, null, newOrder,transVal,is_abort);//change 11.13
+		parent.signalTerminalEndedTransaction(this.terminalName, transactionTypeName, transactionEnd - transactionStart, null, newOrder,transVal,is_abort,OrderVal,DeliveryOrderCount);//change 11.13
 	    }
 	    else
 	    {
-		parent.signalTerminalEndedTransaction(this.terminalName, transactionTypeName, transactionEnd - transactionStart, (skippedDeliveries == 0 ? "None" : "" + skippedDeliveries + " delivery(ies) skipped."), newOrder,transVal,is_abort);//change 11.13
+		parent.signalTerminalEndedTransaction(this.terminalName, transactionTypeName, transactionEnd - transactionStart, (skippedDeliveries == 0 ? "None" : "" + skippedDeliveries + " delivery(ies) skipped."), newOrder,transVal,is_abort,OrderVal,DeliveryOrderCount);//change 11.13
 	    }
+		DeliveryOrderCount = 0;
+		OrderVal = 0;
 
 	    if(limPerMin_Terminal>0){
 		long elapse = transactionEnd-transactionStart;
@@ -595,7 +613,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 				if(typename.equals("New-Order")){
 					neworder = 1;
 				}
-				parent.signalTerminalEndedTransaction(this.terminalName, typename, transactionEnd - transactionStart, null, neworder,transVal,is_abort);
+				parent.signalTerminalEndedTransaction(this.terminalName, typename, transactionEnd - transactionStart, null, neworder,transVal,is_abort,OrderVal,DeliveryOrderCount);
 				if(stopRunningSignal) stopRunning = true;
 			}
 			catch (CommitException e)
@@ -737,7 +755,7 @@ public class jTPCCTerminal implements jTPCCConfig, Runnable
 								break;
 						}
 					}
-					parent.signalTerminalEndedTransaction(this.terminalName, typename, transactionEnd - transactionStart, null, neworder,transVal,is_abort);
+					parent.signalTerminalEndedTransaction(this.terminalName, typename, transactionEnd - transactionStart, null, neworder,transVal,is_abort,OrderVal,DeliveryOrderCount);
 					if(stopRunningSignal) stopRunning = true;
 				
 				}

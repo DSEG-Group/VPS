@@ -57,9 +57,9 @@ public class workerthread implements jTPCCConfig, Runnable{
 	public final static int HEAP_MAX_SIZE = 10000;
 	public final static int TT_NEW_ORDER = 0,
 	TT_PAYMENT = 1,
-	TT_STOCK_LEVEL = 2,
+	TT_STOCK_LEVEL = 4,
 	TT_DELIVERY = 3,
-	TT_ORDER_STATUS = 4;
+	TT_ORDER_STATUS = 2;
 
 
     private String file_path;
