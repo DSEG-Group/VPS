@@ -42,3 +42,5 @@ run/standard_data/*.sql
 run/standard_data/*.json
 *.png
 run/bmsql.sql
+src/predict
+src/server
