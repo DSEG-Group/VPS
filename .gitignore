@@ -32,7 +32,6 @@ run/*result*
 run/logs
 doc/
 README
-README.md
 HOW-TO-RUN.txt
 run/*timeoutAbort
 run/*timeoutValloss
@@ -44,3 +43,5 @@ run/standard_data/*.json
 run/bmsql.sql
 src/predict
 src/server
+src/NLP
+

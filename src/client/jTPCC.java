@@ -149,11 +149,11 @@ public class jTPCC implements jTPCCConfig {
 		String iTerminals = getProp(ini, "terminals");
 
 		String iRunTxnsPerTerminal = ini.getProperty("runTxnsPerTerminal");
-		String iRunMins = ini.getProperty("runMins");
+		String iRunSeconds = ini.getProperty("runSeconds");
 		Tree = new Heap();
-		if (Integer.parseInt(iRunTxnsPerTerminal) == 0 && Integer.parseInt(iRunMins) != 0) {
-			log.info("Term-00, runMins" + "=" + iRunMins);
-		} else if (Integer.parseInt(iRunTxnsPerTerminal) != 0 && Integer.parseInt(iRunMins) == 0) {
+		if (Integer.parseInt(iRunTxnsPerTerminal) == 0 && Integer.parseInt(iRunSeconds) != 0) {
+			log.info("Term-00, runSeconds" + "=" + iRunSeconds);
+		} else if (Integer.parseInt(iRunTxnsPerTerminal) != 0 && Integer.parseInt(iRunSeconds) == 0) {
 			log.info("Term-00, runTxnsPerTerminal" + "=" + iRunTxnsPerTerminal);
 		} else {
 			errorMessage("Term-00, Must indicate either transactions per terminal or number of run minutes!");
@@ -232,7 +232,7 @@ public class jTPCC implements jTPCCConfig {
 			limPerMin_Terminal = -1;
 		}
 
-		boolean iRunMinsBool = false;
+		boolean iRunSecondsBool = false;
 
 		changeTime = Long.parseLong(iChangeTime);
 
@@ -306,7 +306,7 @@ public class jTPCC implements jTPCCConfig {
 				runInfoCSV = new BufferedWriter(
 						new FileWriter(runInfoCSVName));
 				runInfoCSV.write("run,driver,driverVersion,db,sessionStart," +
-						"runMins," +
+						"runSeconds," +
 						"loadWarehouses,runWarehouses,numSUTThreads," +
 						"limitTxnsPerMin," +
 						"thinkTimeMultiplier,keyingTimeMultiplier\n");
@@ -403,10 +403,10 @@ public class jTPCC implements jTPCCConfig {
 				updateStatusLine();
 
 				try {
-					if (Integer.parseInt(iRunMins) != 0 && Integer.parseInt(iRunTxnsPerTerminal) == 0) {
-						iRunMinsBool = true;
-					} else if (Integer.parseInt(iRunMins) == 0 && Integer.parseInt(iRunTxnsPerTerminal) != 0) {
-						iRunMinsBool = false;
+					if (Integer.parseInt(iRunSeconds) != 0 && Integer.parseInt(iRunTxnsPerTerminal) == 0) {
+						iRunSecondsBool = true;
+					} else if (Integer.parseInt(iRunSeconds) == 0 && Integer.parseInt(iRunTxnsPerTerminal) != 0) {
+						iRunSecondsBool = false;
 					} else {
 						throw new NumberFormatException();
 					}
@@ -439,9 +439,9 @@ public class jTPCC implements jTPCCConfig {
 					throw new Exception();
 				}
 
-				if (Double.parseDouble(iRunMins) != 0 && Integer.parseInt(iRunTxnsPerTerminal) == 0) {
+				if (Double.parseDouble(iRunSeconds) != 0 && Integer.parseInt(iRunTxnsPerTerminal) == 0) {
 					try {
-						executionTimeMillis = (long)(Double.parseDouble(iRunMins) * 1000);
+						executionTimeMillis = (long)(Double.parseDouble(iRunSeconds) * 1000);
 						if (executionTimeMillis <= 0)
 							throw new NumberFormatException();
 					} catch (NumberFormatException e1) {
@@ -652,7 +652,7 @@ public class jTPCC implements jTPCCConfig {
 							infoFmt.format("%d,simple,%s,%s,%s,%s,%d,%d,%d,%d,1.0,1.0\n",
 									runID, JTPCCVERSION, iDB,
 									new Timestamp(sessionStartTimestamp).toString(),
-									iRunMins,
+									iRunSeconds,
 									loadWarehouses,
 									numWarehouses,
 									numTerminals,
